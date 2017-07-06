@@ -41,7 +41,7 @@ subtitle: "A Personalized Book Recommender System"
 
 **This recommender system answers questions like these and strives to make a book reader's experience both an exciting and rewarding one when buying books through novelty and diversity**
 
-###**Salient Features**
+### **Salient Features**
 
 **- Item Based / User Based Collaborative Filtering Recommendation System**
 
@@ -81,7 +81,7 @@ https://link.springer.com/chapter/10.1007/978-0-387-85820-3_3
 The authors provide an overview of content-based recommender systems and discusses some of the widely used techniques for representing items and user profiles.
 
 
-## References contd..
+## References continued..
 
 -  Hybrid Recommender Systems: Survey and Experiments -by Robin Burke
 https://link.springer.com/article/10.1023%2FA%3A1021240730564?LI=true
@@ -94,7 +94,7 @@ http://findoutyourfavorite.blogspot.com/2012/04/content-based-filtering.html
 In this, new user topics are discussed along with flow charts
 
 
-##                          **Thank You !!**
+*****
 
 ![](markt.jpg) 
 
