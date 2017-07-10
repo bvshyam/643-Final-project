@@ -1,0 +1,480 @@
+---
+title: "BookRecommender"
+author: "Kumudini, Tulasi, Shyam"
+date: "7/6/2017"
+output: pdf_document
+---
+    
+## Description  
+   
+In this project, a recommender was implemented on a distrubuted system. The Performance of this recommender was then compared with the recommender that was created on Apache Spark using ALS. 
+  
+## Dataset   
+
+The dataset for books was downloaded from #http://www2.informatik.uni-freiburg.de/~cziegler/BX/. There are three datasets -   
+BX-Book-Ratings.csv, BX-Users.csv and BX-Books.csv were used to build the recommendation system.    
+    
+   
+## Installations:   
+
+The recommender on Apache Spark was installed on a single node. The data manipulation in Sparklyr uses the same verbage as dplyr, so the learning curve is said to be easier for R programmers. Also, Sparkly is faster than R and help documentation are easily available in R (?function_name). 
+    
+   
+   
+```{r}
+
+install.packages("sparklyr",repos = "http://cran.us.r-project.org") # installation from cran
+
+#devtools::install_github("rstudio/sparklyr",force=TRUE) # upgrade to the latest sparklyr  # Is not this, then I get sdf_copy_to Error: Column 'database' must be length 1 or 1, not 0
+# comment out because of this error - > spark install(version = "2.1.0") parse error: premature EOF
+
+suppressWarnings(suppressMessages(library(sparklyr)))
+
+
+#spark_install(version = "2.1.0") 
+
+
+
+```
+   
+The returned spark connection(sc) below provides a remote dplyr data source to the Spark cluster
+
+```{r}
+
+suppressWarnings(suppressMessages(library(dplyr)))
+suppressWarnings(suppressMessages(library(reshape2)))
+suppressWarnings(suppressMessages(library(knitr)))
+suppressWarnings(suppressMessages(library(recommenderlab)))
+suppressWarnings(suppressMessages(library(recosystem)))
+suppressWarnings(suppressMessages(library(irlba)))
+suppressWarnings(suppressMessages(library(stringr))) # str_replace_all
+suppressWarnings(suppressMessages(library(tictoc))) # timing
+
+#cache = TRUE # to speed up compile
+opts_knit$set(verbose=TRUE)  # to see where the code is executing
+
+sc <- spark_connect(master = "local")
+
+
+
+
+#Dataset
+#http://www2.informatik.uni-freiburg.de/~cziegler/BX/
+set.seed(3445) # to keep #s from the results the same
+
+# Set the working directory
+#setwd("/Users/tulasiramarao/Documents/Tulasi/CUNYProjects/DATA643/RPrograms")
+
+
+# load data from local drive
+dfbookratings <- read.csv("data/BX-Book-Ratings.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
+colnames(dfbookratings)
+ncol(dfbookratings)
+head(dfbookratings)
+#User.ID ISBN Book.Rating
+nrow(dfbookratings)
+
+dfusers <- read.csv("BX-CSV-Dump/BX-Users.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
+colnames(dfusers)
+#User.ID Location Age
+
+dfbooks <- read.csv("BX-CSV-Dump/BX-Books.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
+colnames(dfbooks)
+#ISBN Book.Title Book.Author Year.Of.Publication Publisher Image.URL.S Image.URL.M Image.URL.L
+
+```
+   
+Now, the two datasets are merged - to get a book name for each ISBN.        
+
+```{r}
+
+
+combinedData <- merge(dfbookratings,dfusers, by=c("User.ID"))
+#colnames(combinedData)
+
+combinedData <- merge(combinedData,dfbooks, by=c("ISBN"))
+#colnames(combinedData)
+#Select the relevant columns - skip timestamp and genres, movieID
+myratings <- subset(combinedData,select = c(1,2,3,6))
+#colnames(myratings)
+#nrow(myratings)
+#summary(myratings)
+colnames(myratings) <- c("userID","ISBN","rating","title")
+#colnames(myratings)
+#"userID" "ISBN"   "rating" "title"
+
+summary(myratings)
+
+```
+   
+   
+The ratings run from 0 to 10.         
+   
+
+```{r}
+# Filter by minimum books read and minimum users per books
+myratings <- myratings %>%
+  group_by(userID) %>%
+  filter(n()>50) %>%
+  group_by(userID) %>%
+  filter(n()>25) 
+
+myratings[is.na(myratings)] <- 0
+
+#userid zero ? remove the row
+myratings <- myratings[apply(myratings[c(1)],1,function(z) any(z!=0)),]
+
+
+# remove slashes and spaces ( easy to query later)
+#myratings$ISBN <- str_replace(myratings$ISBN, "\\/", "")
+
+tic()
+# Generating the user-item matrix for the predictor 
+ratingdcast <- dcast(myratings, userID~ISBN, 
+                   value.var = "rating", fill=0, fun.aggregate = mean)
+
+exectime <- toc()
+exectimeALS <- exectime$toc - exectime$tic
+
+# Filling in rownames
+rownames(ratingdcast) = ratingdcast$userID
+
+# Removing the first column
+ratingdcast <- as.matrix(ratingdcast[,-1])
+# Converting to a matrix
+ratingdcast <- as.matrix(ratingdcast)
+
+# Adding unique user id's using the numeric value of the factor value of the profile name
+ratingsdf <- transform(myratings,ISBN=as.numeric(factor(ISBN)))
+#colnames(ratingsdf)
+#head(ratingsdf)
+#Select the relevant columns - skip timestamp and genres, movieID
+ratingsdf <- subset(ratingsdf,select = c(1,2,3))
+#colnames(ratingsdf)
+
+
+#delete title cos of error - Error: Column `database` must be length 1 or 1, not 0
+#ratingsdf <- subset(ratingsdf,select = c(1,2,3))
+#colnames(ratingsdf)
+ratingsdf$userID <- as.numeric(ratingsdf$userID)
+#colnames(ratingsdf)
+#str(ratingsdf)
+myratingsToDf <- as.data.frame(ratingsdf)
+ratingsdf[is.na(ratingsdf)] <- 0
+
+
+##userid zero ? remove the row
+ratingsdf <- ratingsdf[apply(ratingsdf[c(1)],1,function(z) any(z!=0)),]
+
+```
+
+### I. Alternating Least Squares(ALS) method: 
+
+Copy myratings into Spark and return an R object wrapping the copied object( a spark dataframe)     
+  
+```{r}
+
+#book.tbl <- sdf_copy_to(sc, myratingsToDf, "spark_books",overwrite = TRUE)
+book.tbl <- sdf_copy_to(sc, ratingsdf, overwrite = TRUE)
+
+
+```
+   
+Alternating Least Squares(ALS) to perform matrix factorization on a Spark Dataframe.   
+   
+Create an ALS model:   
+   
+```{r}
+
+# https://github.com/rstudio/sparklyr/blob/master/man/ml_als_factorization.Rd
+# https://rdrr.io/cran/sparklyr/man/ml_als_factorization.html
+
+# Measure time
+tic()
+MLSmodel <- ml_als_factorization(book.tbl, user.column = "userID",item.column = "ISBN",rating.column = "rating", iter.max = 7)
+
+exectime <- toc()
+exectimeALS <- exectime$toc - exectime$tic
+
+summary(MLSmodel)
+
+```
+    
+The execution time was really fast compared to execution time for SVD on regular R.        
+   
+
+Using documentation from    
+https://spark.apache.org/docs/latest/ml-collaborative-filtering.html, the following predictions were created.    
+   
+```{r}
+
+
+#Using documentation from    
+#https://spark.apache.org/docs/latest/ml-collaborative-filtering.html, the following predictions were created.    
+
+
+
+predictions <- MLSmodel$.model %>%
+  invoke("transform", spark_dataframe(book.tbl)) %>%
+  collect()
+
+predictions[predictions$userID == 8,]
+dim(predictions)
+
+pred_RMSE <- sqrt(mean(with(predictions, prediction-rating)^2))
+pred_RMSE
+
+```
+   
+This RMSE will be compared to RMSE from UBCF and irlba package.
+   
+
+```{r}
+
+#userid zero ? remove the row
+predictions2 <- predictions[apply(predictions[c(1)],1,function(z) any(z!=0)),]
+
+```
+
+ALS is a method where the entire loss function is minimized at once, changing half the parameters at a time[Ref#:6}. So, half the parameters are fixed and the other half is recomputed and the process is repeated. ALS uncovers latent features.   
+
+Next, the matrix for the predictions from ALS is calculated. First two dataframes are created - one for userid and one for ISBN w/title.    
+    
+```{r}
+usernames <- ratingsdf %>%
+  distinct(userID) %>%
+  arrange(userID)
+dim(usernames)
+
+
+booknames <- myratings %>%
+  group_by(title) %>% 
+  distinct(title)
+dim(booknames)
+
+booknames <- ratingsdf %>%
+  group_by(ISBN) %>% 
+  distinct(ISBN)
+dim(booknames)
+
+userratings <- myratings %>%
+  distinct(userID,rating) %>%
+  arrange(userID,rating)
+
+```
+
+
+```{r}
+
+u.df <- MLSmodel$user.factors[,-1]
+m.df <- MLSmodel$item.factors[,-1]
+u.matrix <- as.matrix(u.df)
+m.matrix <- as.matrix(m.df)
+
+# now predict
+predict.ALS <- u.matrix %*% t(m.matrix)
+dim(predict.ALS)
+
+rownames(predict.ALS) = as.numeric(usernames$userID)
+colnames(predict.ALS) = booknames$ISBN
+
+kable(predict.ALS[1:5, 1:5])
+
+
+#remove rows with user with zero values
+#predict.ALS <- predict.ALS[!(apply(predict.ALS, 1, function(y) any(y == 0))),]
+
+
+
+predict.ALS.df <- as.data.frame(predict.ALS)
+#predict.ALS[5,1]
+kable(predict.ALS[1:6, 1:6])
+
+#predict.ALS["60392452", "222296"]   # Keep - an example
+
+
+
+```
+   
+Look up of ratings.       
+    
+```{r}
+getBookRating = function(x){
+  predictions[x[1],x[2]]
+}
+
+Titlelookup  <- subset(dfbooks,select = c(1,2))
+
+colnames(Titlelookup) <- c("ISBN","title")
+
+Titlelookup <- Titlelookup[duplicated(Titlelookup)==FALSE,]
+
+getTitle <- function(ISBN1) {
+  title <- subset(Titlelookup, ISBN == ISBN1)$title
+}
+
+#head(dfbooks)
+(t <- getTitle("0195153448"))
+
+```
+
+```{r}
+# Now disconnect from Spark gracefully
+spark_disconnect(sc)
+
+```
+
+### II. User-Based Colloborative Filtering:
+
+This algorithm groups users according to their history of ratings and recommends an item that a user similar to this user (in the same group) liked. So, if user A liked Book 1,2 and 3 and user B liked Book 1 and 2, then Book 3 is a good one to recommend to user B.The assumption of UBCF is that similar users will rate movies similarly. So, the ratings are predicted by first finding a neighborhood of similar users and then aggregating the user ratings to form a prediction.
+
+Popular measures used are Pearson and cosine distance similarity.
+```{r}
+items_to_keep <- 5
+percentage_training <- 0.8
+rating_threshold <- 5
+n_eval <- 1
+
+rdf <- as(ratingdcast,"realRatingMatrix")
+rdf <- rdf[,colCounts(rdf) > 3]
+
+head(rdf,5)
+
+eval_sets <- evaluationScheme(data = rdf, method ="split", train = percentage_training, given = items_to_keep, goodRating = rating_threshold) #, k = n_eval)
+eval_sets
+
+size_sets <- sapply(eval_sets@runsTrain, length)
+size_sets
+
+```
+    
+a) Optimizing a numeric parameter ( Neighborhood size):
+
+Recommendation models contain a numeric parameter that takes account of the k-closest users/items. We can optimize k, by testing different values of a numeric parameter. So, we can get the value we want to proceed testing with. Default k value is 30. We can explore ranges from 10 and 70. Building and evaluating the models:   
+
+```{r}
+
+vector_k <- c(10, 20, 30,40,50,60,70)
+records <- c(5, 10, 15, 20, 25)
+model_name <- "UBCF"
+method_name <- "Cosine"
+k = 70
+
+#define a list of models to evaluate by using lapply( distance metric is cosine )
+models_to_evaluate <- lapply(vector_k, function(k) {
+  list(name= model_name, param = list(normalize = "Z-score", method = method_name,nn=k))
+  
+})
+
+
+names(models_to_evaluate) <- paste0(("UBCF_k_"),vector_k)
+list_results <- evaluate(x=eval_sets,method = models_to_evaluate, n = vector_k,progress = FALSE)  
+list_results
+plot(list_results, annotate = 1, legend ="topleft") 
+title("ROC curve for different k values")
+
+```
+   
+This evaluation took about 0.08 seconds for each iteration.
+
+The best performing can be identified by building a chart for these values with the area under the curve (ROC). The highest is K = 20, so its the best performing neighborhood value. So this value will be used in the neighborhood for all UBCF calculations.
+
+Now a similarity matrix is calculated containing all user-to-user similarities using Pearson and Cosine similary measures.   
+```{r}
+model_to_evaluate <- "UBCF"
+model_parameters <- list(normalize = "Z-Score", method="Cosine", nn=20)
+ 
+model_cosine <- Recommender(getData(eval_sets,"train"),model_to_evaluate,param=model_parameters)
+
+prediction_cosine <- predict(model_cosine,getData(eval_sets,"known"),type="ratings")
+
+rmse_cosine <- calcPredictionAccuracy(prediction_cosine, getData(eval_sets, "unknown"))[1]
+rmse_cosine
+
+```
+    
+b) Distance methods:
+
+This method gives measurement of the similarity between users/items based on the distance between them.Popular models are pearson, jaccard and cosine.
+
+```{r}
+
+model_to_evaluate <- "UBCF"
+kval <- 20
+valList <- c(0, 20,30,40,50,60,70)
+
+model_parameters1 <- list(normalize = "Z-score",method="Cosine",nn=kval)
+model_parameters2 <- list(normalize = "Z-score",method="Pearson",nn=kval)
+model_parameters3 <- list(normalize = "Z-score",method="jaccard",nn=kval)
+
+
+distItem <- list(
+   "Cosine" = list(name=model_to_evaluate, param=model_parameters1),
+   "Pearson" = list(name=model_to_evaluate, param=model_parameters2),
+   "Jaccard" = list(name=model_to_evaluate, param=model_parameters3)
+   
+)
+
+dist_resultsUBCF <- evaluate(eval_sets, distItem, n=valList)
+avg(dist_resultsUBCF)
+
+plot(x=dist_resultsUBCF, y ="ROC")
+title("ROC curve")
+
+```
+
+The evaluation time was about 0.1 second for each iteration. From the ROC curve, it can be seen that the performance was best when using the Jaccard algorithm, as it can be seen at the top of the screen.
+    
+    
+c) Normalization method:
+
+Data needs to be normalized before applying any algorithm. (normalization is done here by taking user’s averages - which is mean ratings of every user subtracted from known ratings)
+
+Use normalization method for Z score using center and z-score parameters to feed the recommenderlab.
+
+
+```{r}
+
+alg_dist <- list(
+   "center" = list(name="UBCF", param=list(normalize = "center",method="Cosine",nn=70)),
+   "Zscore" = list(name="UBCF", param=list(normalize = "Z-score",method="Cosine",nn=70))
+)
+
+dist_resultsUBCF <- evaluate(eval_sets, alg_dist, n=c(1, 5, 10, 15, 20, 25))
+
+#plot ROC
+plot(x = dist_resultsUBCF, y = "ROC")
+title("ROC curve")
+
+
+```
+ZScore did better than center.
+
+### III. SVD 
+- using the irlba package gave an RMSE of 5.174704. 
+
+```{r}
+booksummary <- myratings %>%
+  group_by(ISBN) %>%
+  summarise(
+    avg_review = mean(rating))
+  
+    
+# Computing the SVD
+decomp = irlba(ratingdcast, nu = 3, nv = 3)
+
+# Generating the prediction matrix
+predBook = booksummary$avg_review + (decomp$u * sqrt(decomp$d)) %*% (sqrt(decomp$d) * t(decomp$v))
+
+RMSE <- function(predictionMatrix, actualMatrix){
+  sqrt(mean((predictionMatrix - actualMatrix)^2, na.rm=T))
+}
+
+
+# actualMatrix
+NADF <- ratingdcast
+is.na(NADF) <- NADF == 0
+RMSE(predBook, NADF)
+
+
+```
