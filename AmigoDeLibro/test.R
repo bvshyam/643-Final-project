@@ -13,3 +13,20 @@ preddata <- preddata %>%
             order_by(ISBN)
 
 preddata <- preddata[order(preddata[,3]),]
+
+dfbooks <- read.csv("BX-CSV-Dump/BX-Books.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
+
+colnames(dfbooks)
+bookimages <- subset(dfbooks,select = c(1,8))
+
+
+colnames(bookimages) <- c("ISBN","image")
+
+head(bookimages )
+write.csv(bookimages,file="bookimages.csv")
+
+imagedata <- bookimages
+url <- imagedata[imagedata$ISBN=="0195153448",]$image
+
+urlk <- gsub("\"","",url)
+str(urlk)

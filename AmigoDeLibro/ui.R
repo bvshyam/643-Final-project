@@ -3,16 +3,16 @@ library(shiny)
 # Define UI for dataset viewer application
 fluidPage(
   tags$style(HTML("
-                    @import url('//fonts.googleapis.com/css?family=Lobster|Cabin:400,700');
-                    
-                    h1 {
-                    font-family: 'Lobster', cursive;
-                    font-weight: 500;
-                    line-height: 1.1;
-                    color: #48ca3b;
-                    }
-                    
-                    ")),
+                  @import url('//fonts.googleapis.com/css?family=Lobster|Cabin:400,700');
+                  
+                  h1 {
+                  font-family: 'Lobster', cursive;
+                  font-weight: 500;
+                  line-height: 1.1;
+                  color: #48ca3b;
+                  }
+                  
+                  ")),
   # Application title
   headerPanel("Amigo De Libro"),
   
@@ -29,14 +29,14 @@ fluidPage(
                   choices = c("isbn", "title")),
       
       
-    
-    
+      
+      
       
       numericInput("obs", "Number of books to view:", 10),
       textInput("infeed", "ISBN/Title:", ""),
       
       # dropdown is too slow to load
-     # uiOutput("choose_dataset"),
+      # uiOutput("choose_dataset"),
       
       submitButton("Submit")
     ),
@@ -46,14 +46,17 @@ fluidPage(
     # table with the requested number of observations
     mainPanel(
       
+      htmlOutput("html_link"),
+      
       h3(textOutput("Books recommeded for you", container = span)),
       
       #verbatimTextOutput("summary"), 
       
-      tableOutput("view"),
-     
+      tableOutput("view")
       
-      htmlOutput("html_link")
+      
+      
+      
     )
   )
-)
+  )

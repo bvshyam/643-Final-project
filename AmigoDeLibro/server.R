@@ -6,6 +6,9 @@ call <- data.frame(preddata)
 titledata <- read.csv(file = "storeDBTitleISBN.csv", na.strings =c("", "NA"))
 call <- data.frame(titledata)
 
+imagedata <- read.csv(file = "bookimages.csv", na.strings =c("", "NA"))
+call <- data.frame(imagedata)
+
 combinedData <- merge(preddata,titledata, by=c("ISBN"))
 
 
@@ -39,12 +42,12 @@ function(input, output) {
     if( (input$dataset=="isbn") ) {
       selectInput("dataset", "Or choose a value", as.list(isbns))
     }else{
-       selectInput("dataset", "Or choose a value", as.list(title))
+      selectInput("dataset", "Or choose a value", as.list(title))
     }
     
   })
   
-
+  
   
   #datasetInput <- reactive({
   #  switch(input$dataset,
@@ -64,11 +67,11 @@ function(input, output) {
       "title" = mydata
     }
     
-  #  switch(input$dataset,
-  #         "isbn" = preddata[preddata$ISBN==input$infeed,],
-  #         "title" = preddata[preddata$title==input$infeed,])
+    #  switch(input$dataset,
+    #         "isbn" = preddata[preddata$ISBN==input$infeed,],
+    #         "title" = preddata[preddata$title==input$infeed,])
   })
-
+  
   
   # The output$caption is computed based on a reactive expression
   # that returns input$caption. When the user changes the
@@ -95,9 +98,13 @@ function(input, output) {
     summary(dataset)
   })
   
-
+  
   output$html_link <- renderUI({
-    imgurl <- paste("https://isbnsearch.org/isbn/","",input$infeed)
+    imgurl <- imagedata[imagedata$ISBN==input$infeed,]$image
+    if(is.null(imgurl))
+       return(list(imgurl=""))
+    
+    #imgurl <- paste("https://isbnsearch.org/isbn/","",input$infeed)
     a("Find out more about the book here", 
       href=imgurl, target="_blank") 
   })
@@ -115,4 +122,4 @@ function(input, output) {
     paste("Input text is:", input$infeed)
   })
   
-  }
+}
