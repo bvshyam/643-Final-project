@@ -1,4 +1,5 @@
 library(shiny)
+library(sqldf)
 
 preddata <- read.csv(file = "predictionsDBTable.csv", na.strings =c("", "NA"))
 call <- data.frame(preddata)
@@ -47,7 +48,10 @@ function(input, output) {
     
   })
   
-  
+  output$result <- renderText({
+    paste("You chose", input$state)
+  })
+ 
   
   #datasetInput <- reactive({
   #  switch(input$dataset,
@@ -65,11 +69,19 @@ function(input, output) {
       mydata <- preddata[preddata$title==input$infeed,]
       #"title" = preddata
       "title" = mydata
-    }
+    }}
+  )
+
+  
+    # getch data here for dropdown
+    datasetInputState <- reactive({
+      statement <- paste("select userID,ISBN,rating from preddata where ISBN LIKE \'",
+                         input$state,"\' ")
     
-    #  switch(input$dataset,
-    #         "isbn" = preddata[preddata$ISBN==input$infeed,],
-    #         "title" = preddata[preddata$title==input$infeed,])
+      state <- sqldf(statement)
+      #  mydata2 <- preddata[preddata$ISBN==input$state,]
+       # "state" = mydata2
+
   })
   
   
@@ -99,6 +111,7 @@ function(input, output) {
   })
   
   
+  
   output$html_link <- renderUI({
     imgurl <- imagedata[imagedata$ISBN==input$infeed,]$image
     if(is.null(imgurl))
@@ -120,6 +133,10 @@ function(input, output) {
   
   output$text <- renderText({
     paste("Input text is:", input$infeed)
+  })
+  
+  output$viewisbn <- renderTable({
+    head(datasetInputState(), n = input$obs)
   })
   
 }

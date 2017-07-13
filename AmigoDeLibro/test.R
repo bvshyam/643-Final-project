@@ -1,3 +1,5 @@
+devtools::install_github("ggrothendieck/sqldf")
+
 
 # Set the working directory
 setwd("/Users/tulasiramarao/Documents/Tulasi/CUNYProjects/DATA643/RPrograms/AmigoDeLibro")
@@ -7,6 +9,9 @@ colnames(preddata)
 head(preddata)
 
 preddata[preddata$ISBN == "114",]
+preddata[preddata$ISBN == "160418X",]
+
+
 
 str(preddata)
 preddata <- preddata %>%
@@ -26,7 +31,14 @@ head(bookimages )
 write.csv(bookimages,file="bookimages.csv")
 
 imagedata <- bookimages
-url <- imagedata[imagedata$ISBN=="0195153448",]$image
+url <- imagedata[imagedata$ISBN == "000160418X",]$image
+url
+str(imagedata)
+
+
+#sqldf("select * from dfbooks ")
+library(sqldf)
+sqldf("select image from imagedata where ISBN LIKE '%160418X' ")
 
 urlk <- gsub("\"","",url)
 str(urlk)

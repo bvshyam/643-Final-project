@@ -1,5 +1,13 @@
 library(shiny)
 
+titledata <- read.csv(file = "storeDBTitleISBN.csv", na.strings =c("", "NA"))
+call <- data.frame(titledata)
+
+titledata <- unique(titledata[,c(2,3)])
+titledata  <- titledata [apply(titledata [c(1)],1,function(z) any(z!=0)),]
+isbns <- unique(titledata$ISBN)
+
+
 # Define UI for dataset viewer application
 fluidPage(
   tags$style(HTML("
@@ -27,16 +35,14 @@ fluidPage(
       
       selectInput("dataset", "Search by:", 
                   choices = c("isbn", "title")),
-      
-      
-      
-      
-      
+ 
       numericInput("obs", "Number of books to view:", 10),
-      textInput("infeed", "ISBN/Title:", ""),
+      textInput("infeed", "Enter ISBN/Title:", ""),
       
       # dropdown is too slow to load
-      # uiOutput("choose_dataset"),
+     # uiOutput("choose_dataset"),
+   
+      selectInput("state", "Choose an ISBN:",  isbns),
       
       submitButton("Submit")
     ),
@@ -52,7 +58,8 @@ fluidPage(
       
       #verbatimTextOutput("summary"), 
       
-      tableOutput("view")
+      tableOutput("view"),
+      tableOutput("viewisbn")
       
       
       
