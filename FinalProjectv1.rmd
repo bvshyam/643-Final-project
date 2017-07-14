@@ -23,7 +23,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 *******
 
-# **Recommender System : Movie Lens With SparklyR**
+# **Recommender System : Amigo De Libro (Book Friend)**
 
 ********
 
@@ -155,7 +155,10 @@ dim(dfbookratingswidet)
 #View(dfbooks)
 #View(dfusers)
 
-# We now have dfbookratings(Wide format) , dfusers, dfbooks
+# We now have dfbookratingsvalid(Long format) , 
+# dfbookratingswide (wide format user~books)
+# dfbookratingswidet (wide format books~dfbooks2$yearpub)
+#dfusers, dfbooks
 
 # We keep and refer only the books that are rated, hence putting that i a new bookds data set dfbooks2
 bookIds <- unique(dfbooks$isbn) # unique books in book data
@@ -176,9 +179,9 @@ rm(dfbooks)
 
 ### ModelBase {.tabset}
 
-#### Book Book Decade Based Similarity Matrix
+#### Book-Book Decade Based Similarity Matrix
 
-```{r decadebook warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+```{r decadebook, warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
 
 
 # Finding number of unique features age of user
@@ -254,14 +257,14 @@ booksDistance[w] <- 1
 
 #booksDistance <- as.matrix(booksDistance)
 View(booksDistance)
-dim(booksDistance)
+dim(booksDistance) #2407 by 6 2407 books
 ```
 
 
 
 
 
-```{r storeuserbooknames warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+```{r storeuserbooknames, warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
 
 # Create binary rating matrix , makring > 4 ratings as +1 and 4 and lesser as -1
 #binratings1 <- dfbookratingswidet
@@ -296,10 +299,10 @@ for (i in 1:nrow(binratings))
           {
                     binratings[i,3] <- 1
           }
-           else if(is.na(binratings[i,3]))
-               {
-                    binratings[i,3] <- -1
-               }
+#           else if(is.na(binratings[i,3]))
+#               {
+#                    binratings[i,3] <- -1
+#               }
            else   
                {
                     binratings[i,3] <- -1
@@ -314,34 +317,99 @@ View(binratings)
 
 # Converting to Wide format to get User Book rating matrix
 binratingswide <- binratings %>% select( user, isbn,rating) %>% spread(isbn, rating)%>%  arrange(user)
+
+rownames(binratingswide) <- binratingswide$user
+binallusersrated <- rownames(binratingswide) 
+binallbooksrated <- colnames(binratingswide)
+
 dim(binratingswide)
 View(binratingswide)
-binratingswidet <- dim(binratingswide) %>% select(-user) %>% t(binratingswide)
-dim(binratingswidet)
+
+for (i in 1:ncol(binratingswide)){
+  binratingswide[which(is.na(binratingswide[,i]) == TRUE),i] <- 0
+}
+
+binratingswidet <- binratingswide %>% select(-user) 
+
+binratingswidet <- t(binratingswidet)
+View(binratingswidet)
+length(colnames(binratingswidet))
+
+
+
 
 ```
+
+
+
+### Obtaining User Profile (For The Decade of Book Publication Year Feature)
+
+```{r  warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+
+
+
+#Calculate dot product for User Profiles
+result = matrix(0,6,ncol(binratingswidet)) # As we are dealing with 6 decades (Feature : Year of Publication)
+
+for (c in 1:ncol(binratingswidet)){
+  for (i in 1:ncol(booksDistance)){
+    result[i,c] <- sum((booksDistance[,i]) * (binratingswidet[,c]))
+  }
+}
+
+
+dim(result)
+ 
+
+##Convert to Binary scale
+for (i in 1:nrow(result)){
+  if (result[i] < 0){
+    result[i] <- 0
+  }
+  else {
+    result[i] <- 1
+  }
+}
+
+#This user profiles shows the aggregated inclination of each user towards book publication decade. Each column represents a unique userId, and positive values shows a preference towards a certain decade.
+```
+
+
+Now, assuming that users like similar books, and we retrieve books that are closest in similarity to a user's profile, which represents a user's preference forthe books publication time(decade).
+
+Using Jaccard Distance to measure the similarity between user profiles, and the book publication decade matrix. Jaccard Distance being suitable for binary data.
+
+
+
+
 
 
 
 
 #### User User Similarity Matrix
-
+Using the proxy::dist() functionto calculate Jaccard Distance. 
+It calculates the distance between rows from a single matrix, hence  with 2 matrices, we run over a loop and each time ,  combine the genre matrix with the user profile matrix one rec at a time, and retrieve the minimum distance for each user. 
 
 ```{r  warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
 
-binaryratings <- ratings
-for (i in 1:nrow(binaryratings)){
- if (binaryratings[i,3] > 3){
-   binaryratings[i,3] <- 1
- }
- else{
-   binaryratings[i,3] <- -1
- }
-}
+resulteachuser <- result[1,] #First user's profile
+sim_mat <- rbind.data.frame(resulteachuser, booksDistance)
+sim_mat <- data.frame(lapply(sim_mat,function(x){as.integer(x)})) #convert data to type integer
+ 
 
 
+#Calculate Jaccard distance between user profile and all movies
+library(proxy)
+sim_results <- dist(sim_mat, method = "Jaccard")
+sim_results <- as.data.frame(as.matrix(sim_results[1:nrow(binratingswidet)])) # for n no of books,                                                                                 ie 2364 books
+rows <- which(sim_results == min(sim_results))
+#Recommended movies
+dfbooks2[rows,1:6]
 
 ```
+
+![](`r dfbooks2[rows, 6]`)
+
 
 
 
@@ -352,6 +420,10 @@ for (i in 1:nrow(binaryratings)){
 ```{r  warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
 
 
+
+
+#r <- matrix(1,20,10) 20 b * 10 user
+#b <- matrix(2,20,5)
 
 
 
@@ -368,8 +440,8 @@ for (i in 1:nrow(binaryratings)){
 ```{r  warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
 
 
-model_als.RMSE <- sqrt(mean((predictions$rating-predictions$prediction)^2))
-model_als.RMSE
+#model_als.RMSE <- sqrt(mean((predictions$rating-predictions$prediction)^2))
+#model_als.RMSE
 ```
 
 
