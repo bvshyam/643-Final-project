@@ -1,142 +1,146 @@
 library(shiny)
 library(sqldf)
 
-preddata <- read.csv(file = "predictionsDBTable.csv", na.strings =c("", "NA"))
-call <- data.frame(preddata)
+# Replace all these files once we have the prediction datasets
+# load the necessary data
+preddataColla <- read.csv(file = "predictionsColla.csv", na.strings =c("", "NA"))
+call <- data.frame(preddataColla)
 
-titledata <- read.csv(file = "storeDBTitleISBN.csv", na.strings =c("", "NA"))
-call <- data.frame(titledata)
+preddataContent <- read.csv(file = "predictionsContent.csv", na.strings =c("", "NA"))
+call <- data.frame(preddataContent)
 
 imagedata <- read.csv(file = "bookimages.csv", na.strings =c("", "NA"))
 call <- data.frame(imagedata)
 
-combinedData <- merge(preddata,titledata, by=c("ISBN"))
 
-
-# Define server logic required to summarize and view the selected
-# dataset
 function(input, output) {
+
+  # select only the needed columns and get only unique rows
+  preddataColla <- unique(preddataColla[,c(2,3,4,5)])
+  preddataContent <- unique(preddataContent[,c(2,3,4,5)])
   
-  # By declaring datasetInput as a reactive expression we ensure 
-  # that:
-  #
-  #  1) It is only called when the inputs it depends on changes
-  #  2) The computation and result are shared by all the callers 
-  #	  (it only executes a single time)
-  #
-  titledata <- unique(titledata[,c(2,3)])
-  preddata <- unique(preddata[,c(2,3,4)])
   #userid zero ? remove the row
-  titledata  <- titledata [apply(titledata [c(1)],1,function(z) any(z!=0)),]
-  preddata  <- preddata [apply(preddata [c(1)],1,function(z) any(z!=0)),]
+  preddataColla  <- preddata [apply(preddataColla [c(1)],1,function(z) any(z!=0)),]
+  preddataContent  <- preddataContent [apply(preddataContent [c(1)],1,function(z) any(z!=0)),]
   
-  
-  isbns <- unique(titledata$ISBN)
-  titles <- unique(titledata$title)
-  
-  #isbns <- order(as.character(isbns))
-  #isbns<-order(-isbns)
-  titles <- order(titles)
-  
-  # Drop-down selection box for which data set
-  output$choose_dataset <- renderUI({
-    if( (input$dataset=="isbn") ) {
-      selectInput("dataset", "Or choose a value", as.list(isbns))
-    }else{
-      selectInput("dataset", "Or choose a value", as.list(title))
-    }
-    
-  })
-  
+  # remove dups if any
+  isbns <- unique( preddataColla$ISBN)
+  titles <- unique( preddataColla$title)
+  #titles <- order(titles)
+ 
+  # ISBN dropbox 
   output$result <- renderText({
     paste("You chose", input$state)
   })
  
-  
-  #datasetInput <- reactive({
-  #  switch(input$dataset,
-  #         "isbn" = preddata,
-  #         "title" = titledata)
-  #})
-  
-  # set data here 
-  datasetInput <- reactive({
-    if( (input$dataset=="isbn") ) {
-      #"isbn" = preddata
-      mydata <- preddata[preddata$ISBN==input$infeed,]
-      "isbn" = mydata
-    }else{
-      mydata <- preddata[preddata$title==input$infeed,]
-      #"title" = preddata
-      "title" = mydata
-    }}
-  )
-
-  
-    # getch data here for dropdown
-    datasetInputState <- reactive({
-      statement <- paste("select userID,ISBN,rating from preddata where ISBN LIKE \'",
-                         input$state,"\' ")
-    
-      state <- sqldf(statement)
-      #  mydata2 <- preddata[preddata$ISBN==input$state,]
-       # "state" = mydata2
-
+  #Title dropbox
+  output$result <- renderText({
+    paste("You chose", input$statetitle)
   })
   
+
   
-  # The output$caption is computed based on a reactive expression
-  # that returns input$caption. When the user changes the
-  # "caption" field:
-  #
-  #  1) This function is automatically called to recompute the 
-  #     output 
-  #  2) The new caption is pushed back to the browser for 
-  #     re-display
-  # 
-  # Note that because the data-oriented reactive expressions
-  # below don't depend on input$caption, those expressions are
-  # NOT called when input$caption changes.
-  output$caption <- renderText({
+  # set data here 
+  # datasetInput <- reactive({
+  #  if( (input$dataset=="isbn") ) {
+  #    #"isbn" = preddata
+  #    mydata <- preddata[preddata$ISBN==input$infeed,]
+  #    "isbn" = mydata
+  #  }else{
+  #    mydata <- preddata[preddata$title==input$infeed,]
+  #    #"title" = preddata
+  #    "title" = mydata
+  #  }}
+  #)
+
+  
+  
+    # getch data here for dropdown ISBN
+    # also add validation for errors
+    datasetInputState <- reactive({
+      validate(
+        need(input$state != "", "Please select a valid isbn from ")
+      )
+      myvar <-gsub("(^|[^0-9])0+", "\\1", input$state, perl = TRUE)
+      if(input$recommender == "Collaborative")
+           statement <- paste("select ISBN,rating from preddataColla where ISBN LIKE \'%",
+                         myvar,"\'", sep="")
+      else
+        statement <- paste("select ISBN,rating from preddataContent where ISBN LIKE \'%",
+                           myvar,"\'", sep="")
+      
+      state <-sqldf(statement)
+
+     })
+  
+    # get data here for dropdown Title
+    # also add validation for errors
+    datasetInputStatetitle <- reactive({
+      validate(
+        need(input$statetitle != "", "Please select a valid title")
+      )
+      myvar <-gsub("(^|[^0-9])0+", "\\1", input$statetitle, perl = TRUE)
+      if(input$recommender == "Collaborative")
+          statement <- paste("select title,rating from preddataColla where title LIKE \'%",
+                         myvar,"\'", sep="")
+      else
+        statement <- paste("select title,rating from preddataContent where title LIKE \'%",
+                           myvar,"\'", sep="")
+      
+      statetitle <-sqldf(statement)
+
+    })
+    
+  
+ output$caption <- renderText({
     input$caption
   })
   
-  # The output$summary depends on the datasetInput reactive
-  # expression, so will be re-executed whenever datasetInput is
-  # invalidated
-  # (i.e. whenever the input$dataset changes)
-  output$summary <- renderPrint({
-    dataset <- datasetInput()
-    summary(dataset)
-  })
-  
-  
-  
+
+ #Image link for isbn
   output$html_link <- renderUI({
-    imgurl <- imagedata[imagedata$ISBN==input$infeed,]$image
-    if(is.null(imgurl))
-       return(list(imgurl=""))
-    
-    #imgurl <- paste("https://isbnsearch.org/isbn/","",input$infeed)
-    a("Find out more about the book here", 
+   imgurl <- imagedata[imagedata$ISBN==input$state,]$image
+    a("Picture of the book you chose.", 
+      href=imgurl, target="_blank") 
+  })
+ 
+  #Image link for title
+  output$html_link2 <- renderUI({
+    imgurl <- imagedata[imagedata$title==input$statetitle,]$image
+    a("Picture of the book you chose", 
       href=imgurl, target="_blank") 
   })
   
-  
-  
-  # The output$view depends on both the databaseInput reactive
-  # expression and input$obs, so will be re-executed whenever
-  # input$dataset or input$obs is changed. 
-  output$view <- renderTable({
-    head(datasetInput(), n = input$obs)
-  })
-  
+   
+  # just a debug statement
   output$text <- renderText({
     paste("Input text is:", input$infeed)
   })
   
+  # output of the isbn recommender
   output$viewisbn <- renderTable({
     head(datasetInputState(), n = input$obs)
+  },caption="<b> <span style='color:#48ca3b'>ISBNs Recommended:</b>",
+  caption.placement = getOption("xtable.caption.placement", "top"), 
+  caption.width = getOption("xtable.caption.width", NULL)
+  )
+  
+  # output of the title recommender
+  output$viewtitle <- renderTable({
+    head(datasetInputStatetitle(), n = input$obs)
+  },caption="<br><br><b> <span style='color:#48ca3b'>Titles Recommended: </b>",
+  caption.placement = getOption("xtable.caption.placement", "top"), 
+  caption.width = getOption("xtable.caption.width", NULL)
+  )
+  
+  # dummy
+  output$textEmpty <- renderText({
+    paste("<b>","ISBN:", "</b>")
+  })
+  
+  # dummy
+  output$textEmpty2 <- renderText({
+    paste("<br><b>","Title:", "</b>")
   })
   
 }

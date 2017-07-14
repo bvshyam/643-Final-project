@@ -6,6 +6,7 @@ call <- data.frame(titledata)
 titledata <- unique(titledata[,c(2,3)])
 titledata  <- titledata [apply(titledata [c(1)],1,function(z) any(z!=0)),]
 isbns <- unique(titledata$ISBN)
+titles <- unique(titledata$title)
 
 
 # Define UI for dataset viewer application
@@ -31,18 +32,28 @@ fluidPage(
   sidebarLayout(
     sidebarPanel(
       selectInput("recommender", "Recommender:", 
-                  choices = c("User Based", "Item Based", "SVD")),
+                  choices = c("Collaborative", "Content")),
       
-      selectInput("dataset", "Search by:", 
-                  choices = c("isbn", "title")),
- 
-      numericInput("obs", "Number of books to view:", 10),
-      textInput("infeed", "Enter ISBN/Title:", ""),
+      # Selectize lets you create a default option for ISBN
+      selectizeInput(
+        'state', 'Choose an ISBN:', choices = isbns,
+        options = list(
+          placeholder = 'Please select an option below',
+          onInitialize = I('function() { this.setValue(""); }')
+        )
+      ),
       
-      # dropdown is too slow to load
-     # uiOutput("choose_dataset"),
-   
-      selectInput("state", "Choose an ISBN:",  isbns),
+      # Selectize lets you create a default option for Title
+      selectizeInput(
+        'statetitle', 'Choose a Title:', choices = titles,
+        options = list(
+          placeholder = 'Please select an option below',
+          onInitialize = I('function() { this.setValue(""); }')
+        )
+      ),
+      
+      # how many rows to view
+      numericInput("obs", "Number of books to view:", 2),
       
       submitButton("Submit")
     ),
@@ -51,18 +62,22 @@ fluidPage(
     # Show the caption, a summary of the dataset and an HTML 
     # table with the requested number of observations
     mainPanel(
-      
+      h3(textOutput("Please wait for a few seconds for the tables to load <br><br>")),
+
+      # dummy
+      htmlOutput("textEmpty"),
+      # view the recommender by ISBN
+      tableOutput("viewisbn"),
+      # link for the isbn
       htmlOutput("html_link"),
       
-      h3(textOutput("Books recommeded for you", container = span)),
-      
-      #verbatimTextOutput("summary"), 
-      
-      tableOutput("view"),
-      tableOutput("viewisbn")
-      
-      
-      
+      # dummy
+      htmlOutput("textEmpty2"),
+     
+      # view the recommender by title
+      tableOutput("viewtitle"),
+      # link for the isbn
+      htmlOutput("html_link2")
       
     )
   )
