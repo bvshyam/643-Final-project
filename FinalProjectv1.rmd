@@ -1,0 +1,384 @@
+---
+title: "Recommender System : Book Crossing"
+author: "Kumudini Bhave"
+date: "July 5, 2017"
+output:
+  html_document:
+    fontsize: 17pt
+    highlight: pygments
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+---
+     
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+*******
+
+# **Recommender System : Movie Lens With SparklyR**
+
+********
+
+## Summary
+
+
+This is an R Markdown document for performing analysis of Book Crossing Data and to recommend the new / untried books of interest to users. 
+
+
+```{r loadLib, warning=FALSE, comment=FALSE, message=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=150)}
+
+knitr::opts_chunk$set(message = FALSE, echo=TRUE)
+
+# Library for loading CSV data
+library(RCurl)
+
+# Library for data tidying
+library(tidyr)
+
+# Library for data structure operations 
+suppressWarnings(suppressMessages(library(dplyr)))
+suppressWarnings(suppressMessages(library(knitr)))
+suppressWarnings(suppressMessages(library(stringr)))
+suppressWarnings(suppressMessages(library(reshape2)))
+
+# Library for plotting
+library(ggplot2)
+
+# Library for data display in tabular format
+library(DT)
+library(pander)
+
+# Library for RecommenderSystem Algo
+suppressWarnings(suppressMessages(library(recommenderlab)))
+
+
+```
+
+
+### Data Loading & Preparation
+
+The Book Crossing dataset ,( courtesy,  mined by Cai-Nicolas Ziegler, DBIS Freiburg) was procured from  http://www2.informatik.uni-freiburg.de/~cziegler/BX/
+The format is a CSV dump, that comprises of 3 datasets primarily of the User-Book Rating , Users Information and Books Information.
+
+
+```{r loadData, warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+
+
+# Loading data from GitHub
+
+# Working With Ratings Data First
+# Since the size is large, we need to trim it to a manageable size
+
+dfbookratings <- read.csv("https://raw.githubusercontent.com/bvshyam/643-Final-project/master/data/BX-Book-Ratings.csv", header=T, sep =";", stringsAsFactors = FALSE)
+dim(dfbookratings)
+
+# Rename columns for better handling
+colnames(dfbookratings) <- c("user","isbn","rating")
+
+
+# Getting User And Book Profile data
+
+dfusers <- read.csv("https://raw.githubusercontent.com/bvshyam/643-Final-project/master/data/BX-Users.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
+
+dfbooks <- read.csv("https://raw.githubusercontent.com/bvshyam/643-Final-project/master/data/BX-Books.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
+
+# Renaming columns for better handling
+colnames(dfusers) <- c("user","location","age")
+colnames(dfbooks) <- c("isbn", "title","author","yearpub", "publisher", "iurls","iurlm", "iurll")
+
+# Seggregating location in town, state, country for users
+dfusers <- dfusers %>% separate(col = location, 
+                                      into = c('town', 'state','country'), 
+                                      sep = ",")
+dfbooks <- dfbooks %>% select("isbn", "title","author","yearpub", "publisher","iurlm")
+# Dimensions of the dataset are pretty large
+dim(dfusers)
+dim(dfbooks)
+
+
+# Validating the rating data against users and books
+combinedData <- merge(dfbookratings,dfbooks, by=c("isbn"))
+combinedData <- merge(combinedData,dfusers, by=c("user"))
+length(unique(combinedData$isbn))
+length(unique(combinedData$user))
+dim(combinedData)
+
+# Reduce dataset for users who have read 4 or more books, and books which are rated by at least 5 users, Long Format
+
+dfbookratingsvalid <- combinedData %>% group_by(user) %>% filter(n()>4) %>% group_by(isbn) %>% filter(n()>5)
+dim(dfbookratingsvalid)
+length(unique(dfbookratingsvalid$isbn))
+length(unique(dfbookratingsvalid$user))
+
+
+
+# Converting to Wide format to get User Book rating matrix
+dfbookratingswide <- dfbookratingsvalid %>% select(user, isbn, rating) %>% spread(isbn, rating)%>%  arrange(user)
+dim(dfbookratingswide)
+
+# Storing users and books as rows and column  names
+rownames(dfbookratingswide) <- dfbookratingswide$user
+allusersrated <- rownames(dfbookratingswide) 
+allbooksrated <- colnames(dfbookratingswide)
+#View(dfbookratingswide)
+
+# Free the memory
+rm(dfbookratings)
+
+dfbookratingswidet <- dfbookratingswide %>% select(-user)
+
+# Taking a transpose to have book (rows) by user (columns), This is wide format but books as rows and users and columns
+dfbookratingswidet <-  t(dfbookratingswidet)
+#The rownames and columns names are interchanges correctly
+#View(head(dfbookratingswidet, 100))
+
+dim(dfbookratingswidet)
+
+
+# View sample of dataset
+#datatable(head(dfbookratingswide, 10))
+#datatable(head(dfusers, 10))
+#datatable(head(dfbooks, 10))
+
+# TO COMMENT LATER
+#View(head(dfbookratingsnew, 50000))
+#View(head(dfusers, 10))
+#View(head(dfbooks, 10))
+#View(dfbooks)
+#View(dfusers)
+
+# We now have dfbookratings(Wide format) , dfusers, dfbooks
+
+# We keep and refer only the books that are rated, hence putting that i a new bookds data set dfbooks2
+bookIds <- unique(dfbooks$isbn) # unique books in book data
+bookIdsRated <- unique(dfbookratingsvalid$isbn) # unique books actually rated 
+dfbooks2 <- dfbooks[which((bookIds %in% bookIdsRated) == TRUE),] # Keep in the book data only those rated , saved this in new book data set
+
+rownames(dfbooks2) <- dfbooks2$isbn
+rm(dfbooks)
+
+```
+
+
+
+
+
+
+
+
+### ModelBase {.tabset}
+
+#### Book Book Decade Based Similarity Matrix
+
+```{r decadebook warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+
+
+# Finding number of unique features age of user
+numAge <- length(unique(dfusers$age))
+
+
+# Finding number of unique features publisher, author, year of publication to decide on content base
+
+numPublisher <- length(unique(dfbooks2$publisher)) #313
+numAuthor <- length(unique(dfbooks2$author)) #1161
+
+dfbooks2$yearpub <- as.numeric(dfbooks2$yearpub )
+numYearPub <- length(unique(dfbooks2$yearpub))
+
+# Since no of unique yearpub is also large , 45 .. with 1 NAs, we can take the decade of publication, first imputing the yearpub with median values for all NAs and 0
+
+# Imputing the year of publication null values with median value
+dfbooks2$yearpub[is.na(dfbooks2$yearpub)] <- median(dfbooks2$yearpub, na.rm=TRUE)
+
+# There are many books that have 0 as  the year of publication , we impute them as well for median values.
+dfbooks2$yearpub[dfbooks2$yearpub == 0] <- median(dfbooks2$yearpub, na.rm=TRUE)
+
+
+
+# Introduce Decade in place of Year:
+decadeBoundary <- seq(1890, 2020, by = 10)
+
+dfbooks2$year <- sapply(dfbooks2$yearpub, function(x) {
+  wL <- x < decadeBoundary
+  wU <- x >= decadeBoundary
+  if (sum(wL) == length(decadeBoundary))  {
+    return(1)
+  } else if (sum(wU) == length(decadeBoundary)) {
+    decadeBoundary[length(decadeBoundary)] 
+  } else {
+    decadeBoundary[max(which(wL-wU == -1))]
+  }
+}) 
+
+numYear <- length(unique(dfbooks2$year))
+# We have 6 distinct decades
+
+#backup
+dfbooksdata <- dfbooks2
+
+# - Match Year with ratings data:
+bookdec <- dfbooks2 %>% 
+  select(isbn, year)
+View(bookdec)
+dfbookratingsvalid <- merge(dfbookratingsvalid, bookdec, by = 'isbn')#??
+
+#View(dfbooksdata)
+# Spread the year
+dfbooksdata <- dfbooksdata %>%
+  spread(key = year,
+         value = year,
+         fill = 0,
+         sep = "_")
+rownames(dfbooksdata) <- dfbooksdata$isbn
+#View(dfbooksdata)
+
+#dfbooksdata <- dfbooksdata %>% select(-)
+
+library(text2vec)
+# - compute moviesDistance:
+booksDistance <- dfbooksdata[, 7:ncol(dfbooksdata)]
+
+w <- which(booksDistance > 0, arr.ind = T)
+
+booksDistance[w] <- 1
+
+#booksDistance <- dist2(Matrix(as.matrix(dfbooksdata[, 7:ncol(dfbooksdata)])),                         method = "jaccard")
+
+#booksDistance <- as.matrix(booksDistance)
+View(booksDistance)
+dim(booksDistance)
+```
+
+
+
+
+
+```{r storeuserbooknames warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+
+# Create binary rating matrix , makring > 4 ratings as +1 and 4 and lesser as -1
+#binratings1 <- dfbookratingswidet
+
+#for (i in 1:nrow(binratings1))
+#{
+#     for(j in 1:ncol(binratings1))
+#     {
+#          if( binratings1[i,j] > 4 )
+#          {
+#                    binratings1[i,j] <- 1
+#          }
+ #          else if(is.na(binratings1[i,j]))
+ #              {
+  #                  binratings1[i,j] <- -1
+   #            }
+    #       else   
+     #          {
+      #              binratings1[i,j] <- -1
+       #        }
+ #     }
+#}
+#
+
+
+
+binratings <- dfbookratingsvalid
+
+for (i in 1:nrow(binratings))
+{
+         if( binratings[i,3] > 4 )
+          {
+                    binratings[i,3] <- 1
+          }
+           else if(is.na(binratings[i,3]))
+               {
+                    binratings[i,3] <- -1
+               }
+           else   
+               {
+                    binratings[i,3] <- -1
+               }
+    
+}
+dim(binratings)
+View(binratings)
+
+
+
+
+# Converting to Wide format to get User Book rating matrix
+binratingswide <- binratings %>% select( user, isbn,rating) %>% spread(isbn, rating)%>%  arrange(user)
+dim(binratingswide)
+View(binratingswide)
+binratingswidet <- dim(binratingswide) %>% select(-user) %>% t(binratingswide)
+dim(binratingswidet)
+
+```
+
+
+
+
+#### User User Similarity Matrix
+
+
+```{r  warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+
+binaryratings <- ratings
+for (i in 1:nrow(binaryratings)){
+ if (binaryratings[i,3] > 3){
+   binaryratings[i,3] <- 1
+ }
+ else{
+   binaryratings[i,3] <- -1
+ }
+}
+
+
+
+```
+
+
+
+
+
+
+### Matrix Factorization
+```{r  warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+
+
+
+
+
+
+
+```
+
+
+
+
+
+### Calculate RMSE
+
+```{r  warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+
+
+model_als.RMSE <- sqrt(mean((predictions$rating-predictions$prediction)^2))
+model_als.RMSE
+```
+
+
+*********
+
+### Summary Of Learnings
+
+
+
+#### Reference
+
+******
