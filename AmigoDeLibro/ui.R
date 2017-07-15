@@ -1,12 +1,42 @@
 library(shiny)
 
-titledata <- read.csv(file = "storeDBTitleISBN.csv", na.strings =c("", "NA"))
-call <- data.frame(titledata)
+# Set the working directory
+setwd("/Users/tulasiramarao/Documents/Tulasi/CUNYProjects/DATA643/RPrograms/AmigoDeLibro")
 
-titledata <- unique(titledata[,c(2,3)])
-titledata  <- titledata [apply(titledata [c(1)],1,function(z) any(z!=0)),]
-isbns <- unique(titledata$ISBN)
-titles <- unique(titledata$title)
+# Replace all these files with the ones from prediction 
+# load the necessary data
+preddataColla1 <- read.csv(file = "predictionsColla.csv", na.strings =c("", "NA"))
+call <- data.frame(preddataColla1)
+#colnames(preddataColla1)
+
+preddataContent1 <- read.csv(file = "predictionsContent.csv", na.strings =c("", "NA"))
+call <- data.frame(preddataContent1)
+
+
+users <- read.csv(file = "users.csv", na.strings =c("", "NA"))
+call <- data.frame(users)
+
+isbns <- read.csv(file = "isbns.csv", na.strings =c("", "NA"))
+call <- data.frame(isbns)
+
+titles <- read.csv(file = "titles.csv", na.strings =c("", "NA"))
+call <- data.frame(titles)
+
+users <- subset(users,select = c(2))
+colnames(users) <- c("user")
+
+isbns <- subset(isbns,select = c(2))
+colnames(isbns) <- c("isbn")
+
+titles <- subset(titles,select = c(2))
+colnames(titles) <- c("title")
+
+# Extract isbn and title
+#titledata <- unique(preddataColla1[,c(3,4)])
+#colnames(titledata) <- c("ISBN","title")
+#titledata  <- titledata [apply(titledata [c(1)],1,function(z) any(z!=0)),]
+#isbns <- unique(titledata$ISBN)
+#titles <- unique(titledata$title)
 
 
 # Define UI for dataset viewer application
@@ -34,9 +64,19 @@ fluidPage(
       selectInput("recommender", "Recommender:", 
                   choices = c("Collaborative", "Content")),
       
+      # Selectize lets you create a default option for Title
+      selectizeInput(
+        'stateuser', 'First choose a User:', choices = users,
+        options = list(
+          placeholder = 'Please select an option below',
+          onInitialize = I('function() { this.setValue(""); }')
+        )
+      ),
+      
+      
       # Selectize lets you create a default option for ISBN
       selectizeInput(
-        'state', 'Choose an ISBN:', choices = isbns,
+        'state', 'Now either choose an ISBN:', choices = isbns,
         options = list(
           placeholder = 'Please select an option below',
           onInitialize = I('function() { this.setValue(""); }')
@@ -45,15 +85,17 @@ fluidPage(
       
       # Selectize lets you create a default option for Title
       selectizeInput(
-        'statetitle', 'Choose a Title:', choices = titles,
+        'statetitle', 'or a Title:', choices = titles,
         options = list(
           placeholder = 'Please select an option below',
           onInitialize = I('function() { this.setValue(""); }')
         )
       ),
+ 
+
       
       # how many rows to view
-      numericInput("obs", "Number of books to view:", 2),
+      numericInput("obs", "Enter the number of books to view:", 2),
       
       submitButton("Submit")
     ),
@@ -69,15 +111,15 @@ fluidPage(
       # view the recommender by ISBN
       tableOutput("viewisbn"),
       # link for the isbn
-      htmlOutput("html_link"),
+      #htmlOutput("html_link"),
       
       # dummy
       htmlOutput("textEmpty2"),
      
       # view the recommender by title
-      tableOutput("viewtitle"),
+      tableOutput("viewtitle") #,
       # link for the isbn
-      htmlOutput("html_link2")
+      #htmlOutput("html_link2")
       
     )
   )
