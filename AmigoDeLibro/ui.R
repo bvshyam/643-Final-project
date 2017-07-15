@@ -1,42 +1,15 @@
 library(shiny)
 
-# Set the working directory
-setwd("/Users/tulasiramarao/Documents/Tulasi/CUNYProjects/DATA643/RPrograms/AmigoDeLibro")
-
-# Replace all these files with the ones from prediction 
+# Replace all these files once we have the prediction datasets
 # load the necessary data
-preddataColla1 <- read.csv(file = "predictionsColla.csv", na.strings =c("", "NA"))
-call <- data.frame(preddataColla1)
-#colnames(preddataColla1)
+preddataColla <- read.csv(file = "uti.csv", na.strings =c("", "NA"))
+call <- data.frame(preddataColla)
+preddataColla <- preddataColla[,c(2,3,4,5)]
+colnames(preddataColla) <- c("userID","isbn","title","predictions")
 
-preddataContent1 <- read.csv(file = "predictionsContent.csv", na.strings =c("", "NA"))
-call <- data.frame(preddataContent1)
-
-
-users <- read.csv(file = "users.csv", na.strings =c("", "NA"))
-call <- data.frame(users)
-
-isbns <- read.csv(file = "isbns.csv", na.strings =c("", "NA"))
-call <- data.frame(isbns)
-
-titles <- read.csv(file = "titles.csv", na.strings =c("", "NA"))
-call <- data.frame(titles)
-
-users <- subset(users,select = c(2))
-colnames(users) <- c("user")
-
-isbns <- subset(isbns,select = c(2))
-colnames(isbns) <- c("isbn")
-
-titles <- subset(titles,select = c(2))
-colnames(titles) <- c("title")
-
-# Extract isbn and title
-#titledata <- unique(preddataColla1[,c(3,4)])
-#colnames(titledata) <- c("ISBN","title")
-#titledata  <- titledata [apply(titledata [c(1)],1,function(z) any(z!=0)),]
-#isbns <- unique(titledata$ISBN)
-#titles <- unique(titledata$title)
+users <- unique(preddataColla$userID)
+titles <- unique(preddataColla$title)
+isbns <- unique(preddataColla$isbn)
 
 
 # Define UI for dataset viewer application
@@ -64,6 +37,7 @@ fluidPage(
       selectInput("recommender", "Recommender:", 
                   choices = c("Collaborative", "Content")),
       
+
       # Selectize lets you create a default option for Title
       selectizeInput(
         'stateuser', 'First choose a User:', choices = users,
@@ -91,11 +65,9 @@ fluidPage(
           onInitialize = I('function() { this.setValue(""); }')
         )
       ),
- 
-
       
       # how many rows to view
-      numericInput("obs", "Enter the number of books to view:", 2),
+      numericInput("obs", "Number of books to view:", 2),
       
       submitButton("Submit")
     ),
@@ -105,7 +77,7 @@ fluidPage(
     # table with the requested number of observations
     mainPanel(
       h3(textOutput("Please wait for a few seconds for the tables to load <br><br>")),
-
+      
       # dummy
       htmlOutput("textEmpty"),
       # view the recommender by ISBN
@@ -115,7 +87,7 @@ fluidPage(
       
       # dummy
       htmlOutput("textEmpty2"),
-     
+      
       # view the recommender by title
       tableOutput("viewtitle") #,
       # link for the isbn
