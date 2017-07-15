@@ -1,6 +1,7 @@
 library(shiny)
 library(sqldf)
 
+# load the necessary data ( uti has user title item and predictions)
 uti<- read.csv(file = "uti.csv", na.strings =c("", "NA"))
 call <- data.frame(uti)
 uti <- uti[,c(2,3,4,5)]

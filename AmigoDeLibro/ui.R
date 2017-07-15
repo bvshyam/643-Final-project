@@ -1,7 +1,7 @@
 library(shiny)
 
 # Replace all these files once we have the prediction datasets
-# load the necessary data
+# load the necessary data ( uti has user title item and predictions)
 preddataColla <- read.csv(file = "uti.csv", na.strings =c("", "NA"))
 call <- data.frame(preddataColla)
 preddataColla <- preddataColla[,c(2,3,4,5)]
