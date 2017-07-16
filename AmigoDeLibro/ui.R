@@ -1,15 +1,17 @@
 library(shiny)
+options(shiny.error = browser) # to view errors
 
 # Replace all these files once we have the prediction datasets
-# load the necessary data ( uti has user title item and predictions)
-preddataColla <- read.csv(file = "uti.csv", na.strings =c("", "NA"))
+# load the necessary data (user item title books)
+preddataColla <- read.csv(file = "uti.csv", na.strings =c("", "NA"),sep=",")
 call <- data.frame(preddataColla)
 preddataColla <- preddataColla[,c(2,3,4,5)]
-colnames(preddataColla) <- c("userID","isbn","title","predictions")
+colnames(preddataColla) <- c("userID","isbn","title","moviesrecommended")
 
 users <- unique(preddataColla$userID)
 titles <- unique(preddataColla$title)
 isbns <- unique(preddataColla$isbn)
+moviesR <- unique(preddataColla$moviesrecommended)
 
 
 # Define UI for dataset viewer application
@@ -35,7 +37,7 @@ fluidPage(
   sidebarLayout(
     sidebarPanel(
       selectInput("recommender", "Recommender:", 
-                  choices = c("Collaborative", "Content")),
+                  choices = c("Content With Category", "Content Without Category")),
       
 
       # Selectize lets you create a default option for Title
@@ -86,10 +88,10 @@ fluidPage(
       #htmlOutput("html_link"),
       
       # dummy
-      htmlOutput("textEmpty2"),
+      htmlOutput("textEmpty2") #,
       
       # view the recommender by title
-      tableOutput("viewtitle") #,
+      #tableOutput("viewtitle") #,
       # link for the isbn
       #htmlOutput("html_link2")
       

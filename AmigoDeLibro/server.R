@@ -1,22 +1,21 @@
 library(shiny)
 library(sqldf)
+options(shiny.error = browser) # to view errors
 
-# load the necessary data ( uti has user title item and predictions)
 uti<- read.csv(file = "uti.csv", na.strings =c("", "NA"))
-call <- data.frame(uti)
 uti <- uti[,c(2,3,4,5)]
-colnames(uti) <- c("userID","isbn","title","predictions")
+call <- data.frame(uti)
+colnames(uti) <- c("userID","isbn","title","moviesrecommended")
+#make copies
+predictionsContentCat  <- uti
+predictionsContent <- uti # change to content one later
 
-preddataColla  <- uti
-preddataContent <- uti # change to content one later
-
-imagedata <- read.csv(file = "bookimages.csv", na.strings =c("", "NA"))
+#imagedata <- read.csv(file = "bookimages.csv", na.strings =c("", "NA"))
 #call <- data.frame(imagedata)
 
 
 function(input, output) {
 
-    
   # ISBN dropbox 
   output$result <- renderText({
     paste("You chose", input$state)
@@ -26,86 +25,31 @@ function(input, output) {
   output$result <- renderText({
     paste("You chose", input$statetitle)
   })
-  
-  
-  
-  # set data here 
-  # datasetInput <- reactive({
-  #  if( (input$dataset=="isbn") ) {
-  #    #"isbn" = preddata
-  #    mydata <- preddata[preddata$ISBN==input$infeed,]
-  #    "isbn" = mydata
-  #  }else{
-  #    mydata <- preddata[preddata$title==input$infeed,]
-  #    #"title" = preddata
-  #    "title" = mydata
-  #  }}
-  #)
-  
-  
-  
-  # getch data here for dropdown ISBN
+ 
+  # get data here for dropdown ISBN
   # also add validation for errors
   datasetInputState <- reactive({
     validate(
-      need(input$state != "", "Please select a isbn from ")
+      need(input$state != "", "Please select a value from the drop down lists on the left ")
     )
     # removed preceeding zeros from ISBN
     myvar <-gsub("(^|[^0-9])0+", "\\1", input$state, perl = TRUE)
-    if(input$recommender == "Collaborative")
-      #statement <- paste("select isbn,predictions from predictionsColla where isbn LIKE \'%",
+    if(input$recommender == "Content With Category")
+      #statement <- paste("select isbn,predictions from predictionsContentCat where isbn LIKE \'%",
       #              myvar,"\'", sep="")
-      statement <- paste("select isbn,predictions from predictionsColla where isbn LIKE \'%",
+      statement <- paste("select moviesrecommended from predictionsContentCat where isbn LIKE \'%",
                          myvar,"\' and userID = ",input$stateuser, sep="")
     
     else
       #statement <- paste("select isbn,predictions from predictionsContent where isbn LIKE \'%",
       #                   myvar,"\'", sep="")
-      statement <- paste("select isbn,predictions from predictionsContent where isbn LIKE \'%",
+      statement <- paste("select moviesrecommended from predictionsContent where isbn LIKE \'%",
                          myvar,"\' and userID = ",input$stateuser, sep="")
-    
-    state <-sqldf(statement)
-    
+      state <-sqldf(statement)
+   
   })
   
-  # get data here for dropdown Title
-  # also add validation for errors
-  datasetInputStatetitle <- reactive({
-    validate(
-      need(input$statetitle != "", "Please select a title")
-    )
-    myvar <-gsub("(^|[^0-9])0+", "\\1", input$statetitle, perl = TRUE)
-    if(input$recommender == "Collaborative")
-      statement <- paste("select title,predictions from predictionsColla where title LIKE \'%",
-                         myvar,"\'", sep="")
-    else
-      statement <- paste("select title,predictions from predictionsContent where title LIKE \'%",
-                         myvar,"\'", sep="")
-    
-    statetitle <-sqldf(statement)
-    
-  })
-  
-  
-  # getch data here for dropdown User
-  # also add validation for errors
-  datasetInputStateUser <- reactive({
-    validate(
-      need(input$stateuser != "", "Please select a user from ")
-    )
-    myvar <-gsub("(^|[^0-9])0+", "\\1", input$stateuser, perl = TRUE)
-    if(input$recommender == "Collaborative")
-      statement <- paste("select ISBN,predictions from predictionsColla where userID LIKE \'%",
-                         myvar,"\'", sep="")
-    else
-      statement <- paste("select ISBN,predictions from predictionsContent where userID LIKE \'%",
-                         myvar,"\'", sep="")
-    
-    state <-sqldf(statement)
-    
-  })
-  
-  
+
   output$caption <- renderText({
     input$caption
   })
@@ -134,37 +78,18 @@ function(input, output) {
   # output for the isbn 
   output$viewisbn <- renderTable({
     head(datasetInputState(), n = input$obs)
-  },caption="<b> <span style='color:#48ca3b'>ISBNs Recommended:</b>",
+  },caption="<b> <span style='color:#48ca3b'>Movies Recommended:</b>",
   caption.placement = getOption("xtable.caption.placement", "top"), 
+  include.rownames=FALSE,
   caption.width = getOption("xtable.caption.width", NULL)
   )
   
-  # output for the title 
-  output$viewtitle <- renderTable({
-    head(datasetInputStatetitle(), n = input$obs)
-  },caption="<br><br><b> <span style='color:#48ca3b'>Titles Recommended: </b>",
-  caption.placement = getOption("xtable.caption.placement", "top"), 
-  caption.width = getOption("xtable.caption.width", NULL)
-  )
-  
-  ## DONT DISPLAY THE USERS
-  # output for the user 
-  #  output$viewtitle <- renderTable({
-  #    head(datasetInputStateUser(), n = input$obs)
-  #  },caption="<br><br><b> <span style='color:#48ca3b'>Users Recommended: </b>",
-  #  caption.placement = getOption("xtable.caption.placement", "top"), 
-  #  caption.width = getOption("xtable.caption.width", NULL)
-  #  )
-  
+
   # dummy
-  output$textEmpty <- renderText({
-    paste("<b>","ISBN:", "</b>")
-  })
+  #output$textEmpty <- renderText({
+  #  paste("<b>","ISBN:", "</b>")
+  #})
   
-  # dummy
-  output$textEmpty2 <- renderText({
-    paste("<br><b>","Title:", "</b>")
-  })
   
   
 }
