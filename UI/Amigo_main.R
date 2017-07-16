@@ -7,7 +7,7 @@ return_output <- function(method, userid, count) {
   print(userid)
   }
   else if(method=='collabrative'){
-    
+    output = getALSRecommendation(userid,count)
   }
   else if(method=='content_decade'){
     

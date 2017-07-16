@@ -213,15 +213,13 @@ totalbooks <- books_recommend %>% select(ISBN) %>% unique()
 nonrated = function(userid) {
 
   (ratedbooks = books_recommend[books_recommend$User.ID ==userid,]$ISBN)
-  nonratedbooks = totalbooks[!totalbooks %in% ratedbooks] 
-  
+  (nonratedbooks = totalbooks[!totalbooks$ISBN %in% ratedbooks,])
   df = data.frame(cbind(rep(userid),nonratedbooks,0))
   names(df) = c("User.ID","ISBN","nrat")
-  
  #   print(userid)
-
   return(df)
 }
+
 
 
 recommendation_list = function(userid,count) {
@@ -233,16 +231,8 @@ predictions_user <- predict(fit,activeuserratings[,-c(1:4)],type="class") %>% da
 
 final_recommend = predictions_user[which(predictions_user$recommend_movies==1),] %>% select(ISBN=1) %>% head(count)
 
-print(final_recommend)
-
 return(final_recommend)
 }
-
-recommendation_list(901,2)
-
-(test1 <- recommendation_list(26,2))
-(test2 <- recommendation_list(262902,2))
-(test3 <- recommendation_list(231854,2))
 
 
 

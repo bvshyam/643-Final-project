@@ -55,9 +55,6 @@ opts_knit$set(verbose=TRUE)  # to see where the code is executing
 
 sc <- spark_connect(master = "local")
 
-
-
-
 #Dataset
 #http://www2.informatik.uni-freiburg.de/~cziegler/BX/
 set.seed(3445) # to keep #s from the results the same
@@ -305,21 +302,21 @@ getBookNames<- function(isbnum) {
 
 }
 
-getALSRecommendation <- function(user) {
+getALSRecommendation <- function(user,n) {
      x <- predict.ALS[,c(user)]
      x.df <- data.frame(x)
      x.df$isbns <- rownames(x.df)
      newdata <- x.df[order( -x),] 
-     b <- head(newdata[,"isbns"],10)
+     b <- head(newdata[,"isbns"],n) # to return isbns
      #b <- data.frame(b)
-     booktitles <- getBookNames(b)
+     #booktitles <- getBookNames(b) # to return titles
 }
 
-# TEST PREDICTION PER USER
-x <- getALSRecommendation(39)
+# Test the Predictions per user
+x <- getALSRecommendation(39,10)
 x
 
-y <- getALSRecommendation(325)
+y <- getALSRecommendation(325,10)
 y
 
 
