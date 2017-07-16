@@ -46,16 +46,16 @@ suppressWarnings(suppressMessages(library(stringr)))
 
 ```{r}
 # Book Ratings
-dfbookratings <- read.csv("data/BX-Book-Ratings.csv", header = TRUE, sep =";", stringsAsFactors = FALSE) %>% filter(Book.Rating > 0)
+dfbookratings <- read.csv("../data/BX-Book-Ratings.csv", header = TRUE, sep =";", stringsAsFactors = FALSE) %>% filter(Book.Rating > 0)
 
 #Users information
-dfusers <- read.csv("data/BX-Users.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
+dfusers <- read.csv("../data/BX-Users.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
 
 #Book information
-dfbooks <- read.csv("data/BX-Books.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
+dfbooks <- read.csv("../data/BX-Books.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
 
 #Book Category from Google API
-bookdec <- read.csv("data/final_output.csv", header = TRUE, sep =",", stringsAsFactors = FALSE) %>% select(isbn,category)
+bookdec <- read.csv("../data/final_output_category.csv", header = TRUE, sep =",", stringsAsFactors = FALSE) %>% select(isbn,category)
 
 ```
 
@@ -241,38 +241,5 @@ recommendation_list(26,10)
 
 
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

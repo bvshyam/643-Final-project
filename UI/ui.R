@@ -8,10 +8,16 @@ call <- data.frame(preddataColla)
 preddataColla <- preddataColla[,c(2,3,4,5)]
 colnames(preddataColla) <- c("userID","isbn","title","moviesrecommended")
 
-users <- unique(preddataColla$userID)
+users <- unique(books_recommend$User.ID)
 titles <- unique(preddataColla$title)
-isbns <- unique(preddataColla$isbn)
-moviesR <- unique(preddataColla$moviesrecommended)
+# isbns <- unique(preddataColla$isbn)
+# moviesR <- unique(preddataColla$moviesrecommended)
+
+category_vars <- c(
+  "Content Category Filter" = "content_category",
+  "Collabrative Filter" ="collabrative",
+  "Content Decade Filter" = "content_decade"
+)
 
 
 # Define UI for dataset viewer application
@@ -37,12 +43,12 @@ fluidPage(
   sidebarLayout(
     sidebarPanel(
       selectInput("recommender", "Recommender:", 
-                  choices = c("Content With Category", "Content Without Category")),
+                  choices = category_vars,selected = "content_category"),
       
 
       # Selectize lets you create a default option for Title
       selectizeInput(
-        'stateuser', 'First choose a User:', choices = users,
+        'stateuser', 'Choose a User:', choices = users,selected=26,
         options = list(
           placeholder = 'Please select an option below',
           onInitialize = I('function() { this.setValue(""); }')
@@ -50,23 +56,23 @@ fluidPage(
       ),
       
       
-      # Selectize lets you create a default option for ISBN
-      selectizeInput(
-        'state', 'Now either choose an ISBN:', choices = isbns,
-        options = list(
-          placeholder = 'Please select an option below',
-          onInitialize = I('function() { this.setValue(""); }')
-        )
-      ),
-      
-      # Selectize lets you create a default option for Title
-      selectizeInput(
-        'statetitle', 'or a Title:', choices = titles,
-        options = list(
-          placeholder = 'Please select an option below',
-          onInitialize = I('function() { this.setValue(""); }')
-        )
-      ),
+      # # Selectize lets you create a default option for ISBN
+      # selectizeInput(
+      #   'state', 'Now either choose an ISBN:', choices = isbns,
+      #   options = list(
+      #     placeholder = 'Please select an option below',
+      #     onInitialize = I('function() { this.setValue(""); }')
+      #   )
+      # ),
+      # 
+      # # Selectize lets you create a default option for Title
+      # selectizeInput(
+      #   'statetitle', 'or a Title:', choices = titles,
+      #   options = list(
+      #     placeholder = 'Please select an option below',
+      #     onInitialize = I('function() { this.setValue(""); }')
+      #   )
+      # ),
       
       # how many rows to view
       numericInput("obs", "Number of books to view:", 2),

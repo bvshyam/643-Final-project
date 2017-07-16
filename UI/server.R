@@ -1,5 +1,10 @@
+#install.packages("sqldf")
 library(shiny)
 library(sqldf)
+
+
+source("Amigo_main.R")
+
 options(shiny.error = browser) # to view errors
 
 uti<- read.csv(file = "uti.csv", na.strings =c("", "NA"))
@@ -75,15 +80,22 @@ function(input, output) {
     paste("Input text is:", input$infeed)
   })
   
-  # output for the isbn 
+  #output for the isbn
   output$viewisbn <- renderTable({
     head(datasetInputState(), n = input$obs)
   },caption="<b> <span style='color:#48ca3b'>Movies Recommended:</b>",
-  caption.placement = getOption("xtable.caption.placement", "top"), 
+  caption.placement = getOption("xtable.caption.placement", "top"),
   include.rownames=FALSE,
   caption.width = getOption("xtable.caption.width", NULL)
   )
   
+  
+  # output$viewisbn <- renderUI({
+  #   
+  #   #return_output(input$recommender,input$stateuser,input$obs)
+  #   return_output("content_category",26,2)
+  # }) 
+  # 
 
   # dummy
   #output$textEmpty <- renderText({
