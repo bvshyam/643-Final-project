@@ -1,0 +1,400 @@
+---
+title: "TRFinalb"
+author: "Tulasi"
+date: "7/15/2017"
+output:
+  html_document:
+    fontsize: 17pt
+    highlight: pygments
+    theme: cerulean
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+---
+     
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+
+*******
+
+# **Recommender System : Amigo De Libro (Your book Pal)**
+
+********
+
+## Summary
+
+
+This is an R Markdown document for performing analysis of Book Crossing Data and to recommend the new / untried books of interest to users. 
+
+
+```{r loadLib, warning=FALSE, comment=FALSE, message=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=150)}
+
+knitr::opts_chunk$set(message = FALSE, echo=TRUE)
+
+# Library for loading CSV data
+library(RCurl)
+
+# Library for data tidying
+library(tidyr)
+
+# Library for data structure operations 
+suppressWarnings(suppressMessages(library(dplyr)))
+suppressWarnings(suppressMessages(library(knitr)))
+suppressWarnings(suppressMessages(library(stringr)))
+suppressWarnings(suppressMessages(library(reshape2)))
+
+# Library for plotting
+library(ggplot2)
+
+# Library for data display in tabular format
+library(DT)
+library(pander)
+
+# Library for RecommenderSystem Algo
+suppressWarnings(suppressMessages(library(recommenderlab)))
+
+
+```
+
+
+### Data Loading & Preparation
+
+The Book Crossing dataset ,( courtesy,  mined by Cai-Nicolas Ziegler, DBIS Freiburg) was procured from  http://www2.informatik.uni-freiburg.de/~cziegler/BX/
+The format is a CSV dump, that comprises of 3 datasets primarily of the User-Book Rating , Users Information and Books Information.
+
+
+```{r loadData, warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+
+
+# Loading data from GitHub
+
+# Working With Ratings Data First
+# Since the size is large, we need to trim it to a manageable size
+
+dfbookratings <- read.csv("https://raw.githubusercontent.com/bvshyam/643-Final-project/master/data/BX-Book-Ratings.csv", header=T, sep =";", stringsAsFactors = FALSE)
+dim(dfbookratings)
+
+# Rename columns for better handling
+colnames(dfbookratings) <- c("user","isbn","rating")
+
+
+# Getting User And Book Profile data
+
+dfusers <- read.csv("https://raw.githubusercontent.com/bvshyam/643-Final-project/master/data/BX-Users.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
+
+dfbooks <- read.csv("https://raw.githubusercontent.com/bvshyam/643-Final-project/master/data/BX-Books.csv", header = TRUE, sep =";", stringsAsFactors = FALSE)
+
+# Renaming columns for better handling
+colnames(dfusers) <- c("user","location","age")
+colnames(dfbooks) <- c("isbn", "title","author","yearpub", "publisher", "iurls","iurlm", "iurll")
+
+# Seggregating location in town, state, country for users
+dfusers <- dfusers %>% separate(col = location, 
+                                      into = c('town', 'state','country'), 
+                                      sep = ",")
+dfbooks <- dfbooks %>% select("isbn", "title","author","yearpub", "publisher","iurlm")
+# Dimensions of the dataset are pretty large
+dim(dfusers)
+dim(dfbooks)
+
+
+# Validating the rating data against users and books
+combinedData <- merge(dfbookratings,dfbooks, by=c("isbn"))
+combinedData <- merge(combinedData,dfusers, by=c("user"))
+length(unique(combinedData$isbn)) # No of Unique ISBNs
+length(unique(combinedData$user)) # No of Unique Users
+dim(combinedData)
+
+# Reduce dataset for users who have read 4 or more books, and books which are rated by at least 5 users, Long Format
+
+dfbookratingsvalid <- combinedData %>% group_by(user) %>% filter(n()>4) %>% group_by(isbn) %>% filter(n()>5)
+dim(dfbookratingsvalid)
+length(unique(dfbookratingsvalid$isbn)) # No of Unique ISBNs after filtering
+length(unique(dfbookratingsvalid$user)) # No of Unique Users after filtering
+
+
+################### Wide Format Users ~ Books ####################
+
+# Converting to Wide format to get User Book rating matrix
+dfbookratingswide <- dfbookratingsvalid %>% select(user, isbn, rating) %>% spread(isbn, rating)%>%  arrange(user)
+dim(dfbookratingswide)
+
+# Storing users and books as rows and column  names
+rownames(dfbookratingswide) <- dfbookratingswide$user
+allusersrated <- rownames(dfbookratingswide) 
+allbooksrated <- colnames(dfbookratingswide)
+#View(dfbookratingswide)
+
+# Free the memory
+rm(dfbookratings)
+rm(combinedData)
+
+
+################### Wide Format Books ~ Users ####################
+dfbookratingswidet <- dfbookratingswide %>% select(-user)
+
+# Taking a transpose to have book (rows) by user (columns), This is wide format but books as rows and users as columns
+dfbookratingswidet <-  t(dfbookratingswidet)
+#The rownames and columns names are interchanges correctly
+#View(head(dfbookratingswidet, 100))
+
+dim(dfbookratingswidet)
+
+# View sample of dataset
+
+datatable(head(dfbookratingswide[1:10], 10))
+datatable(head(dfusers, 10))
+datatable(head(dfbooks, 10))
+
+# We keep and refer only the books that are rated, hence putting that in a new books data set dfbooks2, after validating with the ratings data
+
+bookIds <- unique(dfbooks$isbn) # unique books in book data
+bookIdsRated <- unique(dfbookratingsvalid$isbn) # unique books actually rated 
+dfbooks2 <- dfbooks[which((bookIds %in% bookIdsRated) == TRUE),] # Keep in the book data only those                                                                                       # rated , saved this in new book data set
+
+# Store the isbns as rownames
+rownames(dfbooks2) <- dfbooks2$isbn
+# Free memory
+rm(dfbooks)
+
+# We now have,
+# 1. dfbookratingsvalid  (Ratings Data Long format) , 
+# 2. dfbookratingswide   (Ratings Data wide format user~books)
+# 3. dfbookratingswidet  (Ratings Data wide format books~dfbooks2$yearpub)
+# 4. dfusers             (User Data)
+# 5. dfbooks2            (Book Data)
+
+```
+   
+### II. User-Based Colloborative Filtering:
+   
+
+This algorithm groups users according to their history of ratings and recommends an item that a user similar to this user (in the same group) liked. So, if user A liked Book 1,2 and 3 and user B liked Book 1 and 2, then Book 3 is a good one to recommend to user B.The assumption of UBCF is that similar users will rate movies similarly. So, the ratings are predicted by first finding a neighborhood of similar users and then aggregating the user ratings to form a prediction.
+
+Popular measures used are Pearson and cosine distance similarity. 
+```{r}
+
+colnames(dfbookratingsvalid)
+# Generating the user-item matrix for the predictor 
+ratingdcast <- dcast(dfbookratingsvalid, user~isbn, 
+                   value.var = "rating", fill=0, fun.aggregate = mean)
+
+# Filling in rownames
+rownames(ratingdcast) = ratingdcast$user
+colnames(ratingdcast)
+# Removing the first column
+ratingdcast <- as.matrix(ratingdcast[,-1])
+# Converting to a matrix
+ratingdcast <- as.matrix(ratingdcast)
+
+
+```
+
+
+
+```{r}
+items_to_keep <- 5
+percentage_training <- 0.8
+rating_threshold <- 5
+n_eval <- 1
+
+rdf <- as(as.matrix(ratingdcast),"realRatingMatrix")
+rdf <- rdf[,colCounts(rdf) > 3]
+
+head(rdf,5)
+
+eval_sets <- evaluationScheme(data = rdf, method ="split", train = percentage_training, given = items_to_keep, goodRating = rating_threshold) #, k = n_eval)
+eval_sets
+
+size_sets <- sapply(eval_sets@runsTrain, length)
+size_sets
+
+```
+    
+a) Optimizing a numeric parameter ( Neighborhood size):
+
+Recommendation models contain a numeric parameter that takes account of the k-closest users/items. k can be optimized, by testing different values of a numeric parameter. So, we can get the value we want to proceed testing with. Default k value is 30. We can explore ranges from 10 and 70. Building and evaluating the models:   
+
+```{r}
+
+vector_k <- c(10, 20, 30,40,50,60,70)
+records <- c(5, 10, 15, 20, 25)
+model_name <- "UBCF"
+method_name <- "Cosine"
+k = 70
+
+#define a list of models to evaluate by using lapply( distance metric is cosine )
+models_to_evaluate <- lapply(vector_k, function(k) {
+  list(name= model_name, param = list(normalize = "Z-score", method = method_name,nn=k))
+  
+})
+
+
+names(models_to_evaluate) <- paste0(("UBCF_k_"),vector_k)
+list_results <- evaluate(x=eval_sets,method = models_to_evaluate, n = vector_k,progress = FALSE)  
+list_results
+plot(list_results, annotate = 1, legend ="topleft") 
+title("ROC curve for different k values")
+
+```
+   
+This evaluation took about 44 seconds for each iteration.
+
+The best performing kcan be identified by building a chart for these values with the area under the curve (ROC). The highest is K = 70, so its the best performing neighborhood value. So this value will be used in the neighborhood for all UBCF calculations.
+
+Now a similarity matrix is calculated containing all user-to-user similarities using Pearson and Cosine similary measures.   
+```{r}
+model_to_evaluate <- "UBCF"
+model_parameters <- list(normalize = "Z-Score", method="Cosine", nn=70)
+ 
+model_cosine <- Recommender(getData(eval_sets,"train"),model_to_evaluate,param=model_parameters)
+
+prediction_cosine <- predict(model_cosine,getData(eval_sets,"known"),type="ratings")
+
+rmse_cosine <- calcPredictionAccuracy(prediction_cosine, getData(eval_sets, "unknown"))[1]
+rmse_cosine
+#0.3850089
+
+```
+  
+  
+```{r}
+Titlelookup  <- subset(dfbooks,select = c(1,2))
+
+colnames(Titlelookup) <- c("ISBN","title")
+
+Titlelookup <- Titlelookup[duplicated(Titlelookup)==FALSE,]
+
+getTitle <- function(ISBN1) {
+  title <- subset(Titlelookup, ISBN == ISBN1)$title
+}
+## Create databases here 
+
+
+pred2 <- predict(model_cosine,getData(eval_sets, "unknown"),n=5)
+# view the recommendations for top 5 users
+as(pred2,"list")[1:5]
+
+pred2Copy <- pred2
+
+```
+
+```{r}
+#avg(dist_resultsUBCF)[[1]]
+
+str(pred2)
+# recommendations of the first user
+pred2@items[[1]]
+
+#define a list with the recommendations for each user
+recc_matrix <- lapply(pred2@items, function(x){
+  colnames(rdf)[x]
+})
+
+# Let's take a look the recommendations for the first four users:
+recc_matrix[1:3]
+
+## Method for the UI 
+getRecommendation <- function(user,method) {
+  if(method=="Collaborative"){
+     title <- subset(recc_matrix, ISBN == ISBN1)$title
+  }
+}
+
+
+
+```
+
+
+b) Distance methods:
+
+This method gives measurement of the similarity between users/items based on the distance between them.Popular models are pearson, jaccard and cosine.
+
+```{r}
+
+model_to_evaluate <- "UBCF"
+kval <- 70
+valList <- c(0, 20,30,40,50,60,70)
+
+model_parameters1 <- list(normalize = "Z-score",method="Cosine",nn=kval)
+model_parameters2 <- list(normalize = "Z-score",method="Pearson",nn=kval)
+model_parameters3 <- list(normalize = "Z-score",method="jaccard",nn=kval)
+
+
+distItem <- list(
+   "Cosine" = list(name=model_to_evaluate, param=model_parameters1),
+   "Pearson" = list(name=model_to_evaluate, param=model_parameters2),
+   "Jaccard" = list(name=model_to_evaluate, param=model_parameters3)
+   
+)
+
+dist_resultsUBCF <- evaluate(eval_sets, distItem, n=valList)
+avg(dist_resultsUBCF)
+
+plot(x=dist_resultsUBCF, y ="ROC")
+title("ROC curve")
+
+```
+
+The evaluation time was about 1.5 second for each iteration. From the ROC curve, it can be seen that the performance was best when using the Jaccard algorithm(at the top of the graph).
+    
+    
+c) Normalization method:
+
+Data needs to be normalized before applying any algorithm. (normalization is done here by taking user’s averages - which is mean ratings of every user subtracted from known ratings)
+
+Use normalization method for Z score using center and z-score parameters to feed the recommenderlab.
+
+
+```{r}
+
+alg_dist <- list(
+   "center" = list(name="UBCF", param=list(normalize = "center",method="Cosine",nn=70)),
+   "Zscore" = list(name="UBCF", param=list(normalize = "Z-score",method="Cosine",nn=70))
+)
+
+dist_resultsUBCF <- evaluate(eval_sets, alg_dist, n=c(1, 5, 10, 15, 20, 25))
+
+#plot ROC
+plot(x = dist_resultsUBCF, y = "ROC")
+title("ROC curve")
+
+
+```
+Center did better than ZScore.
+
+### III. SVD 
+- using the irlba package gave an RMSE of 5.174704. 
+
+```{r}
+booksummary <- dfbookratingsvalid %>%
+  group_by(isbn) %>%
+  summarise(
+    avg_review = mean(rating))
+  
+    
+# Computing the SVD
+decomp = irlba(ratingdcast, nu = 3, nv = 3)
+
+# Generating the prediction matrix
+predBook = booksummary$avg_review + (decomp$u * sqrt(decomp$d)) %*% (sqrt(decomp$d) * t(decomp$v))
+
+RMSE <- function(predictionMatrix, actualMatrix){
+  sqrt(mean((predictionMatrix - actualMatrix)^2, na.rm=T))
+}
+
+
+# actualMatrix
+NADF <- ratingdcast
+is.na(NADF) <- NADF == 0
+RMSE(predBook, NADF)
+#5.45191
+
+```
