@@ -1,9 +1,10 @@
-
+library(dplyr)
 
 return_output <- function(method, userid, count) {
 
   if(method == 'content_category') {
-  output = recommendation_list(userid,10) %>% merge(dfbooks,"ISBN")
+  output = recommendation_list(userid,count) %>% merge(dfbooks,"ISBN")
+  print(userid)
   }
   else if(method=='collabrative'){
     

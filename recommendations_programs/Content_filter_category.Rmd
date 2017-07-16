@@ -1,6 +1,6 @@
 ---
 title: "Content Based Recommendation"
-author: "Shyam BV"
+author: "Kumudini, Tulasi, Shyam"
 date: "July 16, 2017"
 output:
   html_document:
@@ -217,6 +217,9 @@ nonrated = function(userid) {
   
   df = data.frame(cbind(rep(userid),nonratedbooks,0))
   names(df) = c("User.ID","ISBN","nrat")
+  
+ #   print(userid)
+
   return(df)
 }
 
@@ -230,12 +233,19 @@ predictions_user <- predict(fit,activeuserratings[,-c(1:4)],type="class") %>% da
 
 final_recommend = predictions_user[which(predictions_user$recommend_movies==1),] %>% select(ISBN=1) %>% head(count)
 
+print(final_recommend)
+
 return(final_recommend)
 }
 
+recommendation_list(901,2)
+
+(test1 <- recommendation_list(26,2))
+(test2 <- recommendation_list(262902,2))
+(test3 <- recommendation_list(231854,2))
 
 
-recommendation_list(26,10)
+
 
 #remove(bookdec,combinedData_filter,dfbooks_df,scaled_rating, all_names,all_names_correct,cm,nrat,which_train,test,train,totalbooks,books_recommend)
 

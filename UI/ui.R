@@ -47,37 +47,18 @@ fluidPage(
       
 
       # Selectize lets you create a default option for Title
-      selectizeInput(
-        'stateuser', 'Choose a User:', choices = users,selected=26,
-        options = list(
-          placeholder = 'Please select an option below',
-          onInitialize = I('function() { this.setValue(""); }')
-        )
+      selectInput(
+        'stateuser', 'Choose a User:', choices = users
+        # ,options = list(
+        #   placeholder = 'Please select an option below',
+        #   onInitialize = I('function() { this.setValue(""); }')
+        
       ),
-      
-      
-      # # Selectize lets you create a default option for ISBN
-      # selectizeInput(
-      #   'state', 'Now either choose an ISBN:', choices = isbns,
-      #   options = list(
-      #     placeholder = 'Please select an option below',
-      #     onInitialize = I('function() { this.setValue(""); }')
-      #   )
-      # ),
-      # 
-      # # Selectize lets you create a default option for Title
-      # selectizeInput(
-      #   'statetitle', 'or a Title:', choices = titles,
-      #   options = list(
-      #     placeholder = 'Please select an option below',
-      #     onInitialize = I('function() { this.setValue(""); }')
-      #   )
-      # ),
-      
+
       # how many rows to view
-      numericInput("obs", "Number of books to view:", 2),
+      numericInput("obs", "Number of books to view:", 2)
       
-      submitButton("Submit")
+      ,actionButton("submitButton","Submit")
     ),
     
     
@@ -87,19 +68,8 @@ fluidPage(
       h3(textOutput("Please wait for a few seconds for the tables to load <br><br>")),
       
       # dummy
-      htmlOutput("textEmpty"),
       # view the recommender by ISBN
-      tableOutput("viewisbn"),
-      # link for the isbn
-      #htmlOutput("html_link"),
-      
-      # dummy
-      htmlOutput("textEmpty2") #,
-      
-      # view the recommender by title
-      #tableOutput("viewtitle") #,
-      # link for the isbn
-      #htmlOutput("html_link2")
+      tableOutput("viewisbn")
       
     )
   )
