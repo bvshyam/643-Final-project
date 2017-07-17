@@ -391,7 +391,7 @@ colnames(predictions) <- c("isbn","title","author", "DecadeYearPublished","user"
  
 #############################
 
-getDecadeBasedRecm <- function(fetchforuser )
+getDecadeBasedRecm <- function(fetchforuser,num )
 {
 
           
@@ -425,7 +425,7 @@ getDecadeBasedRecm <- function(fetchforuser )
                predictions <- rbind(predictions, preduser) # Appending for each user, 
           }
      
-     return(predictions)
+     return(head(predictions,num))
 
 } # End of Function
 
@@ -442,16 +442,16 @@ getDecadeBasedRecm <- function(fetchforuser )
 # Testing for User 900
 
 fetchforuser <- c( "900")
-predictions <- getDecadeBasedRecm(fetchforuser)
+predictions <- getDecadeBasedRecm(fetchforuser, 10)
 unique(predictions$year) # Which are the decades predicted for.
-head(predictions, 10)
+head(predictions,10)
 
 # Testing for User 901
 
 fetchforuser <- c( "901")
-predictions <- getDecadeBasedRecm(fetchforuser)
+predictions <- getDecadeBasedRecm(fetchforuser, 2)
 unique(predictions$year) # Which are the decades predicted for.
-head(predictions, 10)
+head(predictions, 2)
 
 
 
