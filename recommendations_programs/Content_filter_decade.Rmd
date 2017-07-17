@@ -71,9 +71,7 @@ The format is a CSV dump, that comprises of 3 datasets primarily of the User-Boo
 
 ```{r loadData, warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
 
-loadData <- function()
-    
-{
+
 # Loading data from GitHub
 
 # Working With Ratings Data First
@@ -173,8 +171,6 @@ rm(dfbooks)
 # 4. dfusers             (User Data)
 # 5. dfbooks2            (Book Data)
 
-return(list(dfbookratingsvalid=dfbookratingsvalid,dfbookratingswide=dfbookratingswide,dfbookratingswidet=dfbookratingswidet,dfusers=dfusers,dfbooks2=dfbooks2))
-}
 
 ```
 
@@ -182,30 +178,21 @@ return(list(dfbookratingsvalid=dfbookratingsvalid,dfbookratingswide=dfbookrating
 
 
 
-### ModelBase {.tabset}
+### Model Base {.tabset}
 
-#### Book-Book Decade Based Similarity Matrix
+#### Step 1:  Book-Book Decade Based Similarity Matrix
 
 ```{r decadebook, warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
-decadeBook <- function()
-{
-     dflist<-loadData()
 
-dfbookratingsvalid<-dflist$dfbookratingsvalid
-dfbookratingswide<-dflist$dfbookratingswide
-dfbookratingswidet<-dflist$dfbookratingswidet
-dfusers<-dflist$dfusers
-dfbooks2<-dflist$dfbooks2
-     
-     
+
 # Finding number of unique features age of user
-#numAge <- length(unique(dfusers$age))
+numAge <- length(unique(dfusers$age))
 
 
 # Finding number of unique features publisher, author, year of publication to decide on content base
 
-#numPublisher <- length(unique(dfbooks2$publisher)) #313
-#numAuthor <- length(unique(dfbooks2$author)) #1161
+numPublisher <- length(unique(dfbooks2$publisher)) #313
+numAuthor <- length(unique(dfbooks2$author)) #1161
 
 dfbooks2$yearpub <- as.numeric(dfbooks2$yearpub )
 numYearPub <- length(unique(dfbooks2$yearpub))
@@ -247,6 +234,14 @@ bookdec <- dfbooks2 %>%
 #View(bookdec)
 dfbookratingsvalid <- merge(dfbookratingsvalid, bookdec, by = 'isbn')#??
 
+
+# Here we add the avaerage reating for the book .This was commendted as it added NA values in joining at the end in predictions
+#avgrate <- data.frame(rownames(dfbookratingswidet),rowMeans(dfbookratingswidet, na.rm=TRUE))
+
+#colnames(avgrate) <- c("isbn", "meanrate")
+
+#dfbooks2 <-  merge(dfbooks2, avgrate, by = 'isbn')
+
 #View(dfbooksdata)
 # Spread the year
 dfbooksdata <- dfbooksdata %>%
@@ -272,9 +267,13 @@ booksDistance[w] <- 1
 #booksDistance <- as.matrix(booksDistance)
 #View(booksDistance)
 dim(booksDistance) #2407 by 6 2407 books
+```
 
 
 
+
+
+```{r storeuserbooknames, warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
 
 # Create binary rating matrix , makring > 4 ratings as +1 and 4 and lesser as -1
 binratings <- dfbookratingswidet
@@ -305,8 +304,7 @@ for (i in 1:nrow(binratings))
 dim(binratings)
 #View(binratings)
 
-return(list(booksDistance, binratings, dfbooks2))
-}
+
 
 
 
@@ -314,22 +312,13 @@ return(list(booksDistance, binratings, dfbooks2))
 
 
 
-#### Obtaining User Profile For Rated Books
+#### Step 2: Obtaining User Profile For Rated Books
 
 Based On The Decade of Book Publication Year Feature, we obtain here the User Profile, that checks for the rated books for the user and notes the year/ decade of publication, whether the rating was above 5 (good) , ie if the books was liked by the user and marks those decades to form the user profile (preference for books of that decade)
 
-```{r userProfile,  warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+```{r userProfile, warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
 
-userProfile <- function()
-{ 
-     dflist<-decadeBook()
-     
-     
-booksDistance<-dflist$booksDistance
-binratings<-dflist$binratings
 
-dfbooks2<-dflist$dfbooks2
-     
 
 #Calculate dot product for User Profiles
 result = matrix(0,6,ncol(binratings)) # As we are dealing with 6 decades (Feature : Year of Publication)
@@ -350,12 +339,14 @@ colnames(result) <- colnames(binratings)
 ##Convert to Binary scale
 
 
+# We mark those books that were liked as 1 and those not liked as 0, the NAs are the ones not rated , so if none books from a decade were rated thatn that deacde is considered for recommendation, since ther eis no negative review by that user for that decade book. This may result is lot of recoemmendations.
+# since decade wise fetch, results in lot of books.
 
 for (i in 1:nrow(result))
 {
      for(j in 1:ncol(result))
      {
-               if( (result[i,j]) <= 0 )
+               if( (result[i,j]) < 0 )
                {
                         result[i,j] <- 0
                }
@@ -366,15 +357,17 @@ for (i in 1:nrow(result))
       }
 }
 
-return(list(result, binratings, booksDistance, dfbooks2))
 
-} # End of userProfile() function
+
 
 
 #This user profiles shows the aggregated inclination of each user towards book publication decade. Each column represents a unique userId, and positive values shows a preference towards a certain decade.
 ```
 
-#### User Book Similarity Matrix : Decade Based
+
+
+
+#### Step 3: User Book Similarity Matrix : Decade Based
 
 Now, assuming that users like similar books, and we retrieve books that are closest in similarity to a user's profile, which represents a user's preference for the books publication time(decade).
 
@@ -385,33 +378,27 @@ It calculates the distance between rows from a single matrix, hence  with 2 matr
 
 Since it was very time consuming as well as memory intensive, the loop was reduced to fetch only  for those users passed in as parameters through the UI.
 
-```{r  warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+```{r  userbooksim, warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
 
 
-#predictionslist <- list()
 
-#preduser <- dfbooks2[rows,1:7] # Prediction for a user
-#     predictions<- c(predictions,preduser)
+#predictions <- data.frame(matrix(nrow = 0, ncol = 5))
+#colnames(predictions) <- c("user","isbn","title","DecadeYearPublished", "AvgRating")
 
-predictions <- data.frame(matrix(nrow = 0, ncol = 4))
-colnames(predictions) <- c("user","isbn","title","DecadeYearPublished")
+predictions <- data.frame(matrix(nrow = 0, ncol = 5))
+colnames(predictions) <- c("isbn","title","author", "DecadeYearPublished","user")
 
+ 
 #############################
 
 getDecadeBasedRecm <- function(fetchforuser )
 {
 
-   dflist<-  userProfile()
-     
-         
-booksDistance<-dflist$booksDistance
-binratings<-dflist$binratings
-result<-as.matrixx(dflist$result)
-dfbooks2<-dflist$dfbooks2
-     
+          
+
           for(i in 1:length(fetchforuser))
           {
-               resulteachuser <- result[,colnames(result) == fetchforuser[i]] #First user's profile
+               resulteachuser <- result[,which(colnames(result) == fetchforuser[i])] #First user's profile
                resulteachuserid <- fetchforuser[i]
                sim_mat <- rbind.data.frame(resulteachuser, booksDistance)
                sim_mat <- data.frame(lapply(sim_mat,function(x){as.integer(x)})) #convert data to type integer
@@ -432,7 +419,7 @@ dfbooks2<-dflist$dfbooks2
                
                
                #Recommended movies
-               preduser <- dfbooks2[rows,c(1,2,7)] # Prediction for a user isbn title decade of publication
+               preduser <- dfbooks2[rows,c(1,2,3,7)] # Prediction for a user: isbn title decade of publication
                preduser$user <- resulteachuserid
                
                predictions <- rbind(predictions, preduser) # Appending for each user, 
@@ -442,37 +429,51 @@ dfbooks2<-dflist$dfbooks2
 
 } # End of Function
 
-fetchforuser <- c( "1674", "1343")
-predictions <- getDecadeBasedRecm(fetchforuser)
- 
 
-unique(predictions$user)
-datatable(head(predictions))
+```
+
+
+
+### Recommendations For User : Decade Of Publication (Content Based)
+
+```{r  pred, warning=FALSE, tidy=TRUE, tidy.opts=list(width.cutoff=80),echo=TRUE}
+
+
+# Testing for User 900
+
+fetchforuser <- c( "900")
+predictions <- getDecadeBasedRecm(fetchforuser)
+unique(predictions$year) # Which are the decades predicted for.
+head(predictions, 10)
+
+# Testing for User 901
+
+fetchforuser <- c( "901")
+predictions <- getDecadeBasedRecm(fetchforuser)
+unique(predictions$year) # Which are the decades predicted for.
+head(predictions, 10)
 
 
 
 ```
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 *********
 
-### Summary Of Learnings
+### Summary Of Learnings & Possible Improvements.
 
+1. The massive dataset to be handled in local enviroment was a challenge, with
+Lot of glitches and back and forth rework due to reconsideration of the user book rating matrix size
 
+2. We tried to do UI in Shiny, howevr the times consumption for each recommenders , again due to the size of the data , made the applciation slow.
 
-#### Reference
+3. More improvements can be done with better content based features.
+
+4. Better memory managemnt needs could be done.
+
+5. If not for Lack Of Time And Limited Resources , better code handling, like single stand alone file or single data load in memory could be made possible.
+
+6. It was pretty challenging to implement content based with not much code to refer to in R
+
 
 ******
