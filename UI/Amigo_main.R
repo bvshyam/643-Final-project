@@ -10,8 +10,7 @@ return_output <- function(method, userid, count) {
     output = getALSRecommendation(userid,count)
   }
   else if(method=='content_decade'){
-    
-    
+     output = getDecadeBasedRecm(userid,count)
   }
       
   return(output)
